@@ -1,3 +1,7 @@
+# Notebook environment used for the supplied run.
+# Install together with requirements.txt. CUDA 12.4 PyTorch wheels use this index.
+--extra-index-url https://download.pytorch.org/whl/cu124
+
 accelerate==1.14.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
@@ -10,8 +14,12 @@ bleach==6.4.0
 certifi==2026.6.17
 charset-normalizer==3.4.8
 click==8.4.1
+comm==0.2.3
 contourpy==1.3.2
 cycler==0.12.1
+# Required by the sentence-transformers training path.
+datasets==5.0.0
+debugpy==1.8.21
 decorator==5.3.1
 defusedxml==0.7.1
 distro==1.9.0
@@ -29,6 +37,7 @@ httpcore==1.0.9
 httpx==0.28.1
 huggingface_hub==1.20.1
 idna==3.18
+ipykernel==7.3.0
 ipython==8.12.3
 jedi==0.20.0
 Jinja2==3.1.6
@@ -49,6 +58,7 @@ mpmath==1.3.0
 nbclient==0.11.0
 nbconvert==7.17.1
 nbformat==5.10.4
+nest-asyncio2==1.7.2
 networkx==3.4.2
 numpy==2.2.6
 nvidia-cublas-cu12==12.4.5.8
@@ -65,8 +75,7 @@ nvidia-nccl-cu12==2.21.5
 nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
 openai==2.44.0
-packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1777103621/work
-pandas==2.3.3
+packaging==26.2
 pandocfilters==1.5.1
 parso==0.8.7
 pexpect==4.9.0
@@ -97,6 +106,7 @@ requests==2.34.2
 rich==15.0.0
 rpds-py==0.30.0
 safetensors==0.8.0
+sentence-transformers==5.6.1
 sentencepiece==0.2.1
 shellingham==1.5.4
 six==1.17.0

@@ -1,114 +1,108 @@
 import json
 import os
-def parse_selected_device(connected_devices: dict, s_l: dict):
-    if not connected_devices:
-        return None, [], {}
 
-    all_categories = set()
-    cnt_others_tags = set()
+def _read_text(path):
+    """Read one UTF-8 prompt asset."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"prompt asset not found: {path}")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read()
+    except OSError as exc:
+        reason = exc.strerror or exc
+        raise OSError(f"prompt asset is not readable: {path} ({reason})") from exc
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{path} is not valid UTF-8: {exc}") from exc
 
-    """
-    if isinstance(connected_devices, str):
-        try:
-            connected_devices = json.loads(connected_devices.replace("'", '"'))
-        except:
-            return None, [], {}
-    """
-    for device_info in connected_devices.values():
-        category = device_info.get('category')
-        if category:
-            all_categories.add(category)
 
-        tags = device_info.get('tags', [])
-        cnt_others_tags.update(tag for tag in tags if tag != category)
+def _read_json(path):
+    """Read one JSON prompt asset."""
+    try:
+        return json.loads(_read_text(path))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} is not valid JSON: {exc}") from exc
 
-    # ✅ 문자열 리스트 형태로 결합: "[#Light, #Alarm, #Fan]"
-    category_tags_str = "[" + ", ".join(f"#{cat}" for cat in sorted(all_categories)) + "]"
-
-    # 선택된 장치 서비스
-    selected_devices = {}
-    for cat in all_categories:
-        if cat in s_l:
-            selected_devices[cat] = s_l[cat]
-
-    return category_tags_str, list(cnt_others_tags), selected_devices
 
 def parse_selected_device_simple(connected_devices: dict):
     if not connected_devices:
         return None, [], {}
 
-    all_categories = set()
-    cnt_others_tags = set()
-
-    """
-    if isinstance(connected_devices, str):
-        try:
-            connected_devices = json.loads(connected_devices.replace("'", '"'))
-        except:
-            return None, [], {}
-    """
-    for device_info in connected_devices.values():
-        category = device_info.get('category')
+    categories = set()
+    extra_tags = set()
+    for device in connected_devices.values():
+        category = device.get("category")
         if category:
-            all_categories.add(category)
+            categories.add(category)
+        extra_tags.update(
+            tag for tag in device.get("tags", []) if tag != category
+        )
 
-        tags = device_info.get('tags', [])
-        cnt_others_tags.update(tag for tag in tags if tag != category)
-
-    # ✅ 문자열 리스트 형태로 결합: "[#Light, #Alarm, #Fan]"
-    category_tags_str = "[" + ", ".join(f"#{cat}" for cat in sorted(all_categories)) + "]"
-
-    # 선택된 장치 서비스
-    """
-    selected_devices = {}
-    for cat in all_categories:
-        if cat in s_l:
-            selected_devices[cat] = s_l[cat]
-    """
-    return category_tags_str, list(cnt_others_tags), all_categories
+    category_tags = "[" + ", ".join(
+        f"#{category}" for category in sorted(categories)
+    ) + "]"
+    return category_tags, list(extra_tags), categories
 
 
+def load_version_config(
+    user_input,
+    connected_devices: dict = None,
+    other_params: dict = None,
+    base_path: str = ".",
+    premap_services: dict = None,
+):
+    version_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), base_path)
+    )
 
-def load_version_config(user_input, connected_devices: dict=None, other_params: dict=None, base_path: str="."):
-    # 1. 모델 구성 정보 로드
-    #print(os.path.dirname(os.path.abspath(__file__)))
-    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),base_path)
+    config = _read_json(os.path.join(version_dir, "model_config.json"))
+    model_input = config["model_input"]
 
-    with open(os.path.join(base_path, "model_config.json"), "r", encoding="utf-8") as f:
-        config = json.load(f)
-    model_input = config["model_input"]  # <- 여기서 딕셔너리 통째로 받아옴
-    
-    # 2. knowledge 파일 로드
+    grammar = _read_text(os.path.join(version_dir, "grammar_ver1.5.10.md"))
+    service_prompt = _read_text(os.path.join(version_dir, "service_prompt_10.md"))
+    value_catalog = _read_json(
+        os.path.join(version_dir, "service_list_ver1.5.4_value.json")
+    )
+    function_catalog = _read_json(
+        os.path.join(version_dir, "service_list_ver1.5.4_function.json")
+    )
 
-    with open(os.path.join(base_path, "grammar_ver1.5.10.md"), "r") as f: #, encoding="utf-8") as f:
-        grammar = f.read()
-    with open(os.path.join(base_path, "service_prompt_10.md"), "r") as f: #, encoding="utf-8") as f:
-        service_prompt = f.read()
-    with open(os.path.join(base_path, "service_list_ver1.5.4_value.json"), "r") as f: #, encoding="utf-8") as f:
-        service_list_value = json.load(f)
-    with open(os.path.join(base_path, "service_list_ver1.5.4_function.json"), "r") as f: #, encoding="utf-8") as f:
-        service_list_function = json.load(f)
-    with open(os.path.join(base_path, "tempo_prompt_9.md"), "r") as f: #, encoding="utf-8") as f:
-        tempo = f.read()
-    with open(os.path.join(base_path, "caution_prompt_8.md"), "r") as f: #, encoding="utf-8") as f:
-        caution = f.read()
+    if premap_services:
+        no_match = set(premap_services.get("no_match") or ())
+        if "value" not in no_match:
+            value_catalog = premap_services.get("value", [])
+        if "function" not in no_match:
+            function_catalog = premap_services.get("function", [])
 
-    category_tags_str, cnt_others_tag, service_list = parse_selected_device_simple(connected_devices)
-    if category_tags_str:
-        connected_devices = f"\n\n---\n[connected_devices]\n {category_tags_str}"
-    else:
-        connected_devices = ""
+    tempo = _read_text(os.path.join(version_dir, "tempo_prompt_9.md"))
+    caution = _read_text(os.path.join(version_dir, "caution_prompt_8.md"))
+    response_prompt = _read_text(
+        os.path.join(version_dir, "response_prompt_6.md")
+    )
+
+    category_tags, _, _ = parse_selected_device_simple(connected_devices)
+    connected_context = (
+        f"\n\n---\n[connected_devices]\n {category_tags}"
+        if category_tags
+        else ""
+    )
 
     if other_params:
-        other_params = json.dumps(other_params, separators=(",", ":"), ensure_ascii=False) #indent=2, 
-        other_params = f"\n\n---\n[userinfo]\n {other_params}"
-        other_params = other_params.replace('\\"', '"').replace('\\n', '').replace('    ', '').replace('   ', '').strip()
+        compact_params = json.dumps(
+            other_params,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        user_context = f"\n\n---\n[userinfo]\n {compact_params}"
+        user_context = (
+            user_context.replace('\\"', '"')
+            .replace("\\n", "")
+            .replace("    ", "")
+            .replace("   ", "")
+            .strip()
+        )
     else:
-        other_params = ""
+        user_context = ""
 
-    with open(os.path.join(base_path, "response_prompt_6.md"), "r") as f: #, encoding="utf-8") as f:
-        responsestep = f.read()
-    # 3. 시스템 프롬프트 구성
     system_prompt = f"""
 You are a JOILang programmer. JOILang is a programming language used to control IoT devices.
 Use the following knowledge to convert natural language into valid JOILang code.
@@ -130,9 +124,9 @@ For each extracted device tag, retrieve **all associated services** (both value 
 If multiple devices share similar service names (e.g., "alarm" function on both Alarm and Siren devices), include the services for each device separately and comprehensively.  
 {service_prompt}
 [service_list_value]
-{service_list_value}
+{value_catalog}
 [service_list_function]
-{service_list_function}
+{function_catalog}
 
 ---
 [Grammar]
@@ -147,18 +141,18 @@ If multiple devices share similar service names (e.g., "alarm" function on both 
 ---
 [Important Cautions]
 {caution}
-{connected_devices}
-{other_params}
+{connected_context}
+{user_context}
 
 ---
-{responsestep}
+{response_prompt}
 - **Never use `while` in code**
 
 --- JOILang Code Output Format Guide ---
 Every scenario generated will follow this structure:
 ```json
 {{
-  "name": "<명령의 의도를 한국어로 **축약하여**, 띄어쓰기 없이 간결한 형태로 작성하세요. 너무 길게 쓰지 말고, 조합된 단어로 의미만 담아내세요.>",
+  "name": "<명령의 의도를 영어로 **축약하여**, 띄어쓰기 없이 간결한 형태로 작성하세요. 너무 길게 쓰지 말고, 조합된 단어로 의미만 담아내세요.>",
   "cron": "<Time-based trigger to start execution>",
   "period": <Execution interval in milliseconds or -1>,
   "code": "<Main logic block written in JOILang>"
@@ -166,29 +160,17 @@ Every scenario generated will follow this structure:
 ```
 
 """
-    #  "name": "<A brief and intuitive name describing the command in korean>",
 
-    # 4. messages 가공: content_from을 기준으로 content 채움
-    final_messages = []
-    for msg in model_input["messages"]:
-        role = msg["role"]
-        content_key = msg.get("content")
-
+    messages = []
+    for message in model_input["messages"]:
+        content_key = message.get("content")
         if content_key == "system_prompt":
             content = system_prompt
         elif content_key == "sentence":
             content = user_input
         else:
-            content = ""  # fallback 처리
-        final_messages.append({
-            "role": role,
-            "content": content
-        })
+            content = ""
+        messages.append({"role": message["role"], "content": content})
 
-
-    # 5. messages 교체
-    model_input["messages"] = final_messages
-    #with open(os.path.join(base_path, "merged_system_prompt.md"), "w", encoding="utf-8") as f:
-    #    f.write(system_prompt)
-
+    model_input["messages"] = messages
     return config, model_input

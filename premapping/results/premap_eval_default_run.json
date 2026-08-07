@@ -1,0 +1,420 @@
+{
+ "run": "default_run",
+ "device": "cuda",
+ "retrieval": {
+  "w": 0.6,
+  "top_k": 10,
+  "warmup_queries": 20,
+  "lat_scope": "Each latency value is measured in a separate pass and divided by the number of queries in that pass."
+ },
+ "evaluation_pools": {
+  "template singles": 142,
+  "natural singles": 106,
+  "paraphrase singles": 352,
+  "compound-template": 300,
+  "compound-paraphrase": 300
+ },
+ "evaluation_total": 1200,
+ "provenance": {
+  "run": "default_run",
+  "written_by": "tutorials/premapping_finetune_tutorial.ipynb notebook re-execution",
+  "interpreter": "python 3.10.20, torch device cuda",
+  "regenerable_without_gpu_or_key": false,
+  "needs": "GPU required for retraining; no API key required",
+  "finetune_all": false,
+  "seed": 2025,
+  "corpus": {
+   "role_documents": 84,
+   "merged_documents": 53,
+   "built_from": [
+    "gpt_mg/version0_6/service_list_ver1.5.4_value.json",
+    "gpt_mg/version0_6/service_list_ver1.5.4_function.json"
+   ]
+  },
+  "training_queries": {
+   "total": 2305,
+   "template": 1137,
+   "natural": 845,
+   "clause": 323,
+   "template_and_clause_from": [
+    "gpt_mg/version0_6/service_list_ver1.5.4_value.json",
+    "gpt_mg/version0_6/service_list_ver1.5.4_function.json"
+   ],
+   "natural_from": [
+    "premapping/data/service_list_ver1.1.7_eng.json",
+    "premapping/data/path_controlled/query_roles.json"
+   ]
+  },
+  "recipe": {
+   "warmup_ratio": 0.1,
+   "max_seq_length": 256,
+   "uniform_batch": null,
+   "hyperparameter_reference": "e5-small",
+   "model_specific_tuning": false,
+   "validation_used_for_selection": false,
+   "note": "only e5-small is fine-tuned in the default run",
+   "caveat": "e5-small hyperparameters are reused for all encoders; validation splits are not used for model selection",
+   "params": {
+    "e5": {
+     "hf": "intfloat/e5-small",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "mxbai": {
+     "hf": "mixedbread-ai/mxbai-embed-xsmall-v1",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "multilingual": {
+     "hf": "intfloat/multilingual-e5-small",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "bge-m3": {
+     "hf": "BAAI/bge-m3",
+     "epochs": 10,
+     "batch": 8,
+     "lr": 2e-05
+    }
+   }
+  },
+  "split_fixes_enabled": false,
+  "role_snapped_queries": 0,
+  "split_role_mismatched_pairs": 140,
+  "pair_files": [
+   "premapping/data/integrated/finetune_pairs_split.jsonl",
+   "premapping/data/integrated/finetune_pairs_nosplit.jsonl"
+  ],
+  "checkpoint_suffix": "v7",
+  "finetuned_jobs": [
+   "e5/split",
+   "e5/nosplit"
+  ],
+  "finetuning": [
+   {
+    "job": "e5/split",
+    "base_model": "intfloat/e5-small",
+    "pairs": 2305,
+    "batch": 32,
+    "in_batch_negatives": 31,
+    "epochs": 10,
+    "lr": 2e-05,
+    "steps": 730,
+    "loss": "MultipleNegativesRankingLoss",
+    "checkpoint": "premapping/models/e5-split-v7"
+   },
+   {
+    "job": "e5/nosplit",
+    "base_model": "intfloat/e5-small",
+    "pairs": 2305,
+    "batch": 32,
+    "in_batch_negatives": 31,
+    "epochs": 10,
+    "lr": 2e-05,
+    "steps": 730,
+    "loss": "MultipleNegativesRankingLoss",
+    "checkpoint": "premapping/models/e5-nosplit-v7"
+   }
+  ]
+ },
+ "arms": [
+  {
+   "label": "intfloat/e5-small + BM25 (split)",
+   "key": "e5",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/e5-split-v7",
+   "total": {
+    "nDCG@10": 0.9834242213946267,
+    "R@5": 0.995,
+    "R@10": 1.0,
+    "lat": 8.68133865413256,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.848844648627432,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.4374369622366325,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.587480690827678,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9950117574683394,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 9.824107576472063,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9504247461546843,
+     "R@5": 0.98,
+     "R@10": 1.0,
+     "lat": 11.37681431369856,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9933969984645288,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 9.861330577848374,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "intfloat/e5-small + BM25 (no split)",
+   "key": "e5",
+   "mode": "nosplit",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/e5-nosplit-v7",
+   "total": {
+    "nDCG@10": 0.9806109280452139,
+    "R@5": 0.9880555555555556,
+    "R@10": 0.9975,
+    "lat": 7.723205246729776,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.4584359093241295,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9702564606893735,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.329705329436176,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.465667162085248,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.971014756475585,
+     "R@5": 0.9827777777777779,
+     "R@10": 0.995,
+     "lat": 7.630446333593379,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.961938339595025,
+     "R@5": 0.9694444444444446,
+     "R@10": 0.995,
+     "lat": 7.606629906998326,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9827745716351524,
+     "R@5": 0.9910321489001693,
+     "R@10": 0.9974619289340102,
+     "lat": 7.508104174459343,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "mxbai-embed-xsmall-v1 + BM25 (split)",
+   "key": "mxbai",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": false,
+   "model": "mixedbread-ai/mxbai-embed-xsmall-v1",
+   "total": {
+    "nDCG@10": 0.9798314311650961,
+    "R@5": 0.99375,
+    "R@10": 1.0,
+    "lat": 5.596995098361124,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 0.9974009137575455,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.639232929572988,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.476306216738556,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 0.9979030099634741,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 4.845922948416873,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9914501052803119,
+     "R@5": 0.9972222222222222,
+     "R@10": 1.0,
+     "lat": 6.41176008929809,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9433059398888751,
+     "R@5": 0.9777777777777779,
+     "R@10": 1.0,
+     "lat": 5.9990067399727804,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9898422365239496,
+     "R@5": 0.9991539763113368,
+     "R@10": 1.0,
+     "lat": 5.4301398508439815,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "multilingual-e5-small (split)",
+   "key": "multilingual",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": false,
+   "model": "intfloat/multilingual-e5-small",
+   "total": {
+    "nDCG@10": 0.9783324392167596,
+    "R@5": 0.9919444444444445,
+    "R@10": 0.9995833333333334,
+    "lat": 9.203619245090522,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 0.9974009137575455,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.322429007076672,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9601199571897003,
+     "R@5": 0.9905660377358491,
+     "R@10": 1.0,
+     "lat": 7.205144159566119,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 0.9979030099634741,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.309668667651501,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9857660884985452,
+     "R@5": 0.9944444444444446,
+     "R@10": 0.9983333333333333,
+     "lat": 9.90195988289391,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9453453192924182,
+     "R@5": 0.9766666666666667,
+     "R@10": 1.0,
+     "lat": 9.570498603085676,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9889639987396875,
+     "R@5": 0.9974619289340102,
+     "R@10": 0.999492385786802,
+     "lat": 8.258529691507823,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "BAAI/bge-m3 (split)",
+   "key": "bge-m3",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": false,
+   "model": "BAAI/bge-m3",
+   "total": {
+    "nDCG@10": 0.9806874271095597,
+    "R@5": 0.9925,
+    "R@10": 0.9995833333333334,
+    "lat": 16.274862832506187,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 15.033663732563737,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9601199571897003,
+     "R@5": 0.9905660377358491,
+     "R@10": 1.0,
+     "lat": 13.58890656452134,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 0.998951504981737,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 13.580290764035784,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9901948475006115,
+     "R@5": 0.9961111111111113,
+     "R@10": 0.9983333333333333,
+     "lat": 16.36089529376477,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9478760435520284,
+     "R@5": 0.9772222222222223,
+     "R@10": 1.0,
+     "lat": 19.159851739338286,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9912801565334766,
+     "R@5": 0.9981387478849408,
+     "R@10": 0.999492385786802,
+     "lat": 14.961449500542077,
+     "n": 985
+    }
+   }
+  }
+ ]
+}

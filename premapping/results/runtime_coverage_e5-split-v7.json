@@ -1,0 +1,166 @@
+{
+  "run": "runtime_coverage",
+  "corpus": {
+    "file": "JOICommands-170.csv",
+    "rows": 170,
+    "query_field": "command_eng",
+    "gold_field": "gt1",
+    "scored": 169,
+    "skipped_rows": 1,
+    "skipped_test_no": [
+      "430"
+    ],
+    "selector_rule": "a gold service is <selector>.<service>; the selector is a tag group of one or more #Tags and the device is the tag naming a catalog device, so all(#Livingroom #Light).switch_on() is Light.switch_on. Tags select instances, so (#Fan #SectorA).switch_switch and (#Fan #SectorB).switch_switch are one gold service"
+  },
+  "ranker": {
+    "entry_point": "premap.premap_from_version_dir",
+    "version_dir": "gpt_mg/version0_6",
+    "model": "premapping/models/e5-split-v7",
+    "model_key": "e5-split-v7",
+    "base_model_key": "e5-small",
+    "mode": "default (split)",
+    "backends_seen": {
+      "e5-split-v7+bm25(split) (hybrid)": 169
+    },
+    "max_total_seen": {
+      "12": 169
+    },
+    "latency_ms": {
+      "mean": 39.4,
+      "p50": 38.9,
+      "calls": 169,
+      "scope": "premap_from_version_dir, warm process, model preloaded"
+    }
+  },
+  "gt1": {
+    "full_coverage": 94,
+    "full_coverage_rate": 0.5562,
+    "pair_hits": 332,
+    "pair_total": 500,
+    "pair_recall": 0.664,
+    "rows_with_a_no_match_role": 0,
+    "rows_whose_gold_exceeds_the_budget": 1
+  },
+  "budget_ceiling": {
+    "rule": "gold pairs the runtime catalogs hold, up to top_k_per_role per role and max_total merged",
+    "pair_hits": 486,
+    "pair_total": 500,
+    "pair_recall": 0.972,
+    "full_coverage": 161,
+    "full_coverage_rate": 0.9527
+  },
+  "any_accepted_scenario": {
+    "gold_fields": [
+      "gt1",
+      "gt2",
+      "gt3"
+    ],
+    "full_coverage": 100,
+    "full_coverage_rate": 0.5917
+  },
+  "by_role": {
+    "value": {
+      "pair_hits": 134,
+      "pair_total": 212,
+      "pair_recall": 0.6321
+    },
+    "function": {
+      "pair_hits": 198,
+      "pair_total": 277,
+      "pair_recall": 0.7148
+    },
+    "not_in_catalog": {
+      "pair_hits": 0,
+      "pair_total": 11,
+      "pair_recall": 0.0
+    }
+  },
+  "gold_services_absent_from_the_runtime_catalog": {
+    "distinct": 10,
+    "occurrences": 11,
+    "distinct_names": [
+      "FallSensor.fallDetection_fall",
+      "Group1.alarm_off",
+      "Group1.switch_off",
+      "Group2.relativeHumidityMeasurement_humidity",
+      "Group2.switch_off",
+      "SectorA.blind_close",
+      "Upper.curtain_curtain",
+      "Upper.switch_off",
+      "Upper.switch_switch",
+      "clock.delay"
+    ]
+  },
+  "by_gold_size": {
+    "1": {
+      "queries": 30,
+      "fully_covered": 27,
+      "pair_hits": 27,
+      "pair_total": 30,
+      "pair_recall": 0.9
+    },
+    "2": {
+      "queries": 72,
+      "fully_covered": 56,
+      "pair_hits": 126,
+      "pair_total": 144,
+      "pair_recall": 0.875
+    },
+    "3": {
+      "queries": 20,
+      "fully_covered": 5,
+      "pair_hits": 40,
+      "pair_total": 60,
+      "pair_recall": 0.6667
+    },
+    "4": {
+      "queries": 25,
+      "fully_covered": 5,
+      "pair_hits": 74,
+      "pair_total": 100,
+      "pair_recall": 0.74
+    },
+    "5": {
+      "queries": 6,
+      "fully_covered": 0,
+      "pair_hits": 18,
+      "pair_total": 30,
+      "pair_recall": 0.6
+    },
+    "6": {
+      "queries": 4,
+      "fully_covered": 1,
+      "pair_hits": 13,
+      "pair_total": 24,
+      "pair_recall": 0.5417
+    },
+    "8": {
+      "queries": 2,
+      "fully_covered": 0,
+      "pair_hits": 5,
+      "pair_total": 16,
+      "pair_recall": 0.3125
+    },
+    "9": {
+      "queries": 9,
+      "fully_covered": 0,
+      "pair_hits": 24,
+      "pair_total": 81,
+      "pair_recall": 0.2963
+    },
+    "15": {
+      "queries": 1,
+      "fully_covered": 0,
+      "pair_hits": 5,
+      "pair_total": 15,
+      "pair_recall": 0.3333
+    }
+  },
+  "provenance": {
+    "command": "python3 premapping/runtime_coverage.py --model premapping/models/e5-split-v7",
+    "interpreter": "python 3.10.20",
+    "written_utc": "2026-08-05T14:46:28Z",
+    "regenerable_without_gpu_or_key": true,
+    "needs": "the sparse half alone reproduces a sparse run; the hybrid arms need sentence-transformers, and no API key is used"
+  }
+}

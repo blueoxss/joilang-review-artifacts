@@ -1,0 +1,450 @@
+{
+  "run": "premap_ab",
+  "question": "does replacing the catalogs with a twelve-service shortlist change what the generation path produces",
+  "corpus": {
+    "file": "JOICommands-170.csv",
+    "query_field": "command_eng",
+    "gold_fields": [
+      "gt1",
+      "gt2",
+      "gt3"
+    ],
+    "sample_size": 20,
+    "seed": 2025,
+    "eligible_rows": 169
+  },
+  "scoring": "exact match between the service set the generated code names and the service set of some one accepted scenario",
+  "arms": {
+    "premap": {
+      "command": "run.py --premap version0_6 \"<cmd>\"",
+      "correct": 18,
+      "rate": 0.9,
+      "rows_without_a_parsed_candidate": 0
+    },
+    "no_premap": {
+      "command": "run.py \"<cmd>\"",
+      "correct": 19,
+      "rate": 0.95,
+      "rows_without_a_parsed_candidate": 0
+    }
+  },
+  "delta_correct": -1,
+  "rows_where_the_arms_disagree": [
+    "317"
+  ],
+  "elapsed_seconds": 434.1,
+  "rows": [
+    {
+      "test_no": "314",
+      "command": "Sound the alarm's siren when the window opens.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_siren",
+          "Window.windowControl_window"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Alarm.alarm_siren', 'value:Siren.sirenMode_sirenMode', 'value:Alarm.alarm_alarmVolume', 'value:Alarm.alarm_alarm', 'function:Alarm.alarm_both', 'function:Alarm.alarm_off', 'value:SoundSensor.soundSensor_sound', 'function:Siren.switch_on', 'value:Siren.switch_switch', 'function:Alarm.alarm_strobe', 'function:Window.windowControl_open', 'value:Window.windowControl_window']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_siren",
+          "Window.windowControl_window"
+        ]
+      }
+    },
+    {
+      "test_no": "331",
+      "command": "Turn off the light after 7 seconds and turn it back on after 5 seconds.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Clock.clock_delay",
+          "Light.switch_off",
+          "Light.switch_on"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Light.switch_off', 'value:Light.switch_switch', 'function:Light.switch_on', 'value:GasValve.gasMeter_gasMeterTime', 'function:Fan.switch_off', 'value:SmartPlug.powerMeter_powerConsumption', 'function:Siren.switch_off', 'function:Television.switch_off', 'value:GasMeter.gasMeter_gasMeterTime', 'value:Light.switchLevel_levelRange', 'function:Light.switchLevel_setLevel', 'value:Light.switchLevel_level']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Clock.clock_delay",
+          "Light.switch_off",
+          "Light.switch_on"
+        ]
+      }
+    },
+    {
+      "test_no": "302",
+      "command": "If the TV is off, the curtains are closed, and the fan is off, turn on the TV and open the curtains. If the speakers are playing and the lights are off, turn on the lights and close the blinds.",
+      "premap": {
+        "correct": false,
+        "services": [
+          "Blind.blind_close",
+          "Curtain.curtain_close",
+          "Curtain.curtain_open",
+          "Fan.switch_switch",
+          "Light.switch_on",
+          "Light.switch_switch",
+          "Speaker.switch_switch",
+          "Television.switch_on",
+          "Television.switch_switch"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Television.tvChannel_tvChannel', 'value:Television.switch_switch', 'value:Television.tvChannel_tvChannelName', 'function:Fan.switch_off', 'function:Television.switch_off', 'function:Curtain.curtain_close', 'function:Fan.switch_on', 'function:Light.switch_off', 'value:Dehumidifier.switch_switch', 'function:Speaker.switch_off', 'value:Irrigator.switch_switch', 'value:AirPurifier.switch_switch']",
+      "no_premap": {
+        "correct": false,
+        "services": [
+          "Curtain.curtain_curtain",
+          "Curtain.curtain_open",
+          "Fan.switch_switch",
+          "Light.switch_on",
+          "Light.switch_switch",
+          "Shade.windowShade_close",
+          "Speaker.mediaPlayback_playbackStatus",
+          "Television.switch_on",
+          "Television.switch_switch"
+        ]
+      }
+    },
+    {
+      "test_no": "161",
+      "command": "Toggle the power of the light.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Light.switch_toggle"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Light.switch_toggle', 'value:Light.switch_switch', 'value:Light.switchLevel_levelRange', 'value:Light.switchLevel_level', 'value:Light.colorControl_saturation', 'value:SmartPlug.powerMeter_powerConsumption', 'value:Light.colorControl_hue', 'function:Light.switch_on', 'function:Light.switch_off', 'function:Light.switchLevel_alert', 'function:RobotCleaner.switch_toggle', 'function:SmartPlug.switch_toggle']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Light.switch_toggle"
+        ]
+      }
+    },
+    {
+      "test_no": "373",
+      "command": "Every morning at 8am, if the speaker is off, turn it on and announce 'This is the weather today' via the speaker. Then, if the lights are off, turn them on and open the blinds.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Blind.blind_open",
+          "Light.switch_on",
+          "Light.switch_switch",
+          "Speaker.mediaPlayback_speak",
+          "Speaker.switch_on",
+          "Speaker.switch_switch"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Speaker.switch_on', 'value:Clock.clock_isHoliday', 'function:Speaker.switch_off', 'value:WeatherProvider.weatherProvider_weather', 'function:Light.switch_on', 'function:Light.switch_off', 'value:Speaker.switch_switch', 'function:Light.switchLevel_setLevel', 'function:Dehumidifier.switch_on', 'value:WeatherProvider.weatherProvider_humidityWeather', 'value:Speaker.mediaPlayback_supportedPlaybackCommands', 'value:Speaker.mediaPlayback_playbackStatus']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Blind.blind_open",
+          "Light.switch_on",
+          "Light.switch_switch",
+          "Speaker.mediaPlayback_speak",
+          "Speaker.switch_on",
+          "Speaker.switch_switch"
+        ]
+      }
+    },
+    {
+      "test_no": "82",
+      "command": "If it's 3:15pm, blare the siren on the alarm.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_siren",
+          "Clock.clock_time"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Alarm.alarm_siren', 'function:Alarm.alarm_off', 'function:Siren.switch_on', 'value:FallDetector.fallDetection_fall', 'function:Alarm.alarm_strobe', 'value:AirPurifier.airPurifierFanMode_airPurifierFanMode', 'function:Alarm.alarm_both', 'value:SmartPlug.powerMeter_powerConsumption', 'value:AirPurifier.airPurifierFanMode_supportedAirPurifierFanModes', 'function:Siren.sirenMode_setSirenMode', 'value:Charger.chargingState_supportedChargingStates', 'value:SmartPlug.voltageMeasurement_voltage']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_siren",
+          "Clock.clock_time"
+        ]
+      }
+    },
+    {
+      "test_no": "59",
+      "command": "Find the remainder of 10 divided by 3.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Calculator.calculator_mod"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Light.colorControl_saturation', 'value:Light.colorControl_hue', 'function:Light.colorControl_setHue', 'value:Light.colorControl_color', 'function:Light.colorControl_setSaturation', 'value:GasValve.gasMeter_gasMeterVolume', 'function:Light.colorControl_setColor', 'value:GasValve.gasMeter_gasMeterTime', 'value:Shade.windowShade_supportedWindowShadeCommands', 'function:Calculator.calculator_div', 'function:Calculator.calculator_mod', 'function:Calculator.calculator_mul']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Calculator.calculator_mod"
+        ]
+      }
+    },
+    {
+      "test_no": "38",
+      "command": "Turn off the alarm.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_off"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Alarm.alarm_alarm', 'function:Alarm.alarm_off', 'value:Alarm.alarm_alarmVolume', 'function:Siren.switch_off', 'value:Alarm.battery_battery', 'function:Alarm.alarm_strobe', 'function:Alarm.alarm_both', 'function:SmartPlug.switch_off', 'function:Alarm.alarm_setAlarmVolume', 'value:Siren.switch_switch', 'value:Dehumidifier.switch_switch', 'value:SmartPlug.switch_switch']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_off"
+        ]
+      }
+    },
+    {
+      "test_no": "291",
+      "command": "If the alarm is off, the lights are off, and the curtains are open, sound the siren and turn on the lights.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_alarm",
+          "Alarm.alarm_siren",
+          "Curtain.curtain_curtain",
+          "Light.switch_on",
+          "Light.switch_switch"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Alarm.alarm_alarm', 'function:Siren.switch_off', 'function:Siren.switch_on', 'function:Alarm.alarm_off', 'value:Alarm.alarm_alarmVolume', 'function:Alarm.alarm_siren', 'function:Light.switch_off', 'function:Curtain.curtain_open', 'value:Alarm.battery_battery', 'value:Siren.switch_switch', 'value:Irrigator.switch_switch', 'value:FallDetector.fallDetection_fall']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_alarm",
+          "Alarm.alarm_siren",
+          "Curtain.curtain_curtain",
+          "Light.switch_on",
+          "Light.switch_switch"
+        ]
+      }
+    },
+    {
+      "test_no": "69",
+      "command": "Take a time-lapse video with the camera at speed 2 for 10 seconds.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Camera.camera_takeTimelapse"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Camera.camera_video', 'function:Camera.camera_takeTimelapse', 'value:Camera.camera_image', 'function:Camera.switch_on', 'function:Camera.switch_off', 'function:Camera.camera_take', 'function:Camera.switch_toggle', 'value:GasValve.gasMeter_gasMeterTime', 'value:GasMeter.gasMeter_gasMeterTime', 'value:Speaker.mediaPlayback_playbackStatus', 'value:Clock.clock_timestamp', 'function:Speaker.mediaPlayback_fastForward']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Camera.camera_takeTimelapse"
+        ]
+      }
+    },
+    {
+      "test_no": "264",
+      "command": "Sound the alarm's siren if the outside fine particulate matter concentration is above 50.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_siren",
+          "WeatherProvider.weatherProvider_pm25Weather"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Alarm.alarm_siren', 'value:Siren.sirenMode_sirenMode', 'function:Alarm.alarm_both', 'value:Alarm.alarm_alarm', 'value:Alarm.alarm_alarmVolume', 'value:AirQualityDetector.dustSensor_fineDustLevel', 'function:Alarm.alarm_off', 'function:Siren.switch_on', 'value:AirQualityDetector.dustSensor_veryFineDustLevel', 'function:Alarm.alarm_strobe', 'function:Alarm.alarm_setAlarmVolume', 'value:SoundSensor.soundSensor_sound']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_siren",
+          "WeatherProvider.weatherProvider_pm25Weather"
+        ]
+      }
+    },
+    {
+      "test_no": "157",
+      "command": "Set the brightness of the light to 80 with a speed of 5.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Light.switchLevel_setLevel"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Fan.fanControl_setPercent', 'value:LightSensor.lightLevel_light', 'function:Fan.fanControl_setFanSpeed', 'function:Light.colorControl_setHue', 'value:Light.colorControl_saturation', 'value:Light.colorControl_hue', 'function:Light.switchLevel_setLevel', 'value:Light.switchLevel_levelRange', 'function:Light.colorControl_setSaturation', 'function:Light.switchLevel_alert', 'value:Light.colorControl_color', 'value:Light.switchLevel_level']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Light.switchLevel_setLevel"
+        ]
+      }
+    },
+    {
+      "test_no": "318",
+      "command": "When the alarm turns on, send an email to me and Hong Gil-dong with the subject \"Alert Triggered\" and the message \"The alarm has turned on.\"",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_alarm",
+          "EmailProvider.emailProvider_sendMail"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Alarm.alarm_alarm', 'function:EmailProvider.emailProvider_sendMailWithFile', 'value:Alarm.alarm_alarmVolume', 'function:EmailProvider.emailProvider_sendMail', 'function:Alarm.alarm_both', 'value:Alarm.battery_battery', 'function:Alarm.alarm_off', 'function:Alarm.alarm_siren', 'function:Alarm.alarm_strobe', 'value:MotionSensor.motionSensor_motion', 'value:Siren.switch_switch', 'value:Pump.pumpOperationMode_currentOperationMode']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_alarm",
+          "EmailProvider.emailProvider_sendMail"
+        ]
+      }
+    },
+    {
+      "test_no": "292",
+      "command": "If the air conditioner is off and the curtains are closed, turn on the air conditioner and open the curtains.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "AirConditioner.switch_on",
+          "AirConditioner.switch_switch",
+          "Curtain.curtain_curtain",
+          "Curtain.curtain_open"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:AirConditioner.airConditionerMode_targetTemperature', 'value:AirConditioner.airConditionerMode_airConditionerMode', 'value:AirConditioner.airConditionerMode_supportedAcModes', 'function:AirConditioner.airConditionerMode_setAirConditionerMode', 'function:AirConditioner.airConditionerMode_setTemperature', 'value:AirPurifier.airPurifierFanMode_airPurifierFanMode', 'function:Curtain.curtain_open', 'value:Curtain.curtain_curtain', 'function:AirConditioner.switch_on', 'function:Window.windowControl_open', 'value:AirPurifier.airPurifierFanMode_supportedAirPurifierFanModes', 'function:Humidifier.switch_on']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "AirConditioner.switch_on",
+          "AirConditioner.switch_switch",
+          "Curtain.curtain_curtain",
+          "Curtain.curtain_open"
+        ]
+      }
+    },
+    {
+      "test_no": "63",
+      "command": "Send an email with the most recent photo as an attachment to 'test@example.com' with the subject line \"Photo\" and the content \"This is a photo\".",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Camera.camera_image",
+          "EmailProvider.emailProvider_sendMailWithFile"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:EmailProvider.emailProvider_sendMailWithFile', 'function:EmailProvider.emailProvider_sendMail', 'value:Camera.camera_image', 'value:Clock.clock_isHoliday', 'value:Camera.camera_video', 'value:AirPurifier.airPurifierFanMode_supportedAirPurifierFanModes', 'function:Camera.camera_take', 'value:Alarm.battery_battery', 'value:Clock.clock_year', 'function:Camera.switch_on', 'function:Camera.camera_takeTimelapse', 'function:Camera.switch_off']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Camera.camera_image",
+          "EmailProvider.emailProvider_sendMailWithFile"
+        ]
+      }
+    },
+    {
+      "test_no": "351",
+      "command": "Check status every 2 seconds and turn on the speakers whenever the TV turns on.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Speaker.switch_on",
+          "Television.switch_switch"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:Television.switch_on', 'function:Speaker.switch_on', 'function:Fan.switch_on', 'value:Television.tvChannel_tvChannel', 'function:Light.switch_on', 'function:Speaker.mediaPlayback_setPlaybackStatus', 'function:Recorder.switch_on', 'value:Television.tvChannel_tvChannelName', 'value:Speaker.mediaPlayback_playbackStatus', 'value:Television.audioMute_muteStatus', 'value:Recorder.audioRecord_recordStatus', 'value:Speaker.switch_switch']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Speaker.switch_on",
+          "Television.switch_switch"
+        ]
+      }
+    },
+    {
+      "test_no": "148",
+      "command": "Start watering the irrigator.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Irrigator.irrigatorOperatingState_startWatering"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Irrigator.irrigatorOperatingState_irrigatorOperatingState', 'function:Irrigator.irrigatorOperatingState_startWatering', 'value:Irrigator.irrigatorPortion_waterPortion', 'value:Irrigator.switch_switch', 'function:Irrigator.irrigatorPortion_setWaterPortion', 'function:Irrigator.switch_on', 'function:Irrigator.switch_off', 'function:Irrigator.switch_toggle', 'value:LeakSensor.leakSensor_leakage', 'value:AirQualityDetector.carbonDioxideMeasurement_carbonDioxide', 'value:Refrigerator.refrigeration_defrost', 'function:Feeder.feederOperatingState_startFeeding']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Irrigator.irrigatorOperatingState_startWatering"
+        ]
+      }
+    },
+    {
+      "test_no": "317",
+      "command": "Begin taking a photo every 5 seconds once the door opens.",
+      "premap": {
+        "correct": false,
+        "services": [
+          "Camera.camera_takeTimelapse",
+          "DoorLock.doorControl_door"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['function:DoorLock.doorControl_open', 'value:DoorLock.doorControl_door', 'function:DoorLock.doorControl_close', 'function:Camera.camera_takeTimelapse', 'value:Camera.camera_image', 'function:Camera.switch_on', 'value:Camera.camera_video', 'value:AirQualityDetector.dustSensor_fineDustLevel', 'function:Feeder.feederOperatingState_startFeeding', 'function:Camera.switch_off', 'value:GasValve.gasMeter_gasMeterTime', 'value:GasMeter.gasMeter_gasMeterTime']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Camera.camera_take",
+          "DoorLock.doorControl_door"
+        ]
+      }
+    },
+    {
+      "test_no": "287",
+      "command": "If the temperature is above 29 degrees, the humidity is above 80%, and the lights are off, turn on the air conditioner and turn on the lights.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "AirConditioner.switch_on",
+          "HumiditySensor.relativeHumidityMeasurement_humidity",
+          "Light.switch_on",
+          "Light.switch_switch",
+          "TemperatureSensor.temperatureMeasurement_temperature"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:AirQualityDetector.temperatureMeasurement_temperatureRange', 'value:TemperatureSensor.temperatureMeasurement_temperatureRange', 'value:AirQualityDetector.temperatureMeasurement_temperature', 'value:TemperatureSensor.temperatureMeasurement_temperature', 'function:AirConditioner.airConditionerMode_setTemperature', 'function:AirConditioner.airConditionerMode_setAirConditionerMode', 'function:Humidifier.switch_on', 'function:Humidifier.switch_off', 'value:AirConditioner.airConditionerMode_targetTemperature', 'value:WeatherProvider.weatherProvider_temperatureWeather', 'function:Dehumidifier.switch_on', 'function:Fan.switch_on']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "AirConditioner.switch_on",
+          "HumiditySensor.relativeHumidityMeasurement_humidity",
+          "Light.switch_on",
+          "Light.switch_switch",
+          "TemperatureSensor.temperatureMeasurement_temperature"
+        ]
+      }
+    },
+    {
+      "test_no": "431",
+      "command": "Every two seconds, turn the alarm siren on for 1 second, then turn it off, and every time it turn on the siren, make sure the window is closed and stop the loop if it is.",
+      "premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_off",
+          "Alarm.alarm_siren",
+          "Clock.clock_delay",
+          "Window.windowControl_window"
+        ]
+      },
+      "premap_line": "Premap :: e5-small+bm25(split) ['value:Siren.sirenMode_sirenMode', 'value:Siren.switch_switch', 'function:Siren.switch_off', 'function:Siren.switch_on', 'value:Alarm.alarm_alarm', 'function:Alarm.alarm_off', 'value:Clock.clock_second', 'value:Clock.clock_isHoliday', 'function:Alarm.alarm_siren', 'function:Siren.switch_toggle', 'value:SmartPlug.switch_switch', 'function:Light.switch_off']",
+      "no_premap": {
+        "correct": true,
+        "services": [
+          "Alarm.alarm_off",
+          "Alarm.alarm_siren",
+          "Clock.clock_delay",
+          "Window.windowControl_window"
+        ]
+      }
+    }
+  ]
+}

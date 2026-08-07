@@ -1,0 +1,387 @@
+{
+ "run": "split_fixes",
+ "device": "cuda",
+ "retrieval": {
+  "w": 0.6,
+  "top_k": 10,
+  "warmup_queries": 20
+ },
+ "evaluation_pools": {
+  "template singles": 142,
+  "natural singles": 106,
+  "paraphrase singles": 352,
+  "compound-template": 300,
+  "compound-paraphrase": 300
+ },
+ "evaluation_total": 1200,
+ "provenance": {
+  "run": "split_fixes",
+  "finetune_all": false,
+  "seed": 2025,
+  "corpus": {
+   "role_documents": 84,
+   "merged_documents": 53,
+   "built_from": [
+    "gpt_mg/version0_6/service_list_ver1.5.4_value.json",
+    "gpt_mg/version0_6/service_list_ver1.5.4_function.json"
+   ]
+  },
+  "training_queries": {
+   "total": 2305,
+   "template": 1137,
+   "natural": 845,
+   "clause": 323,
+   "template_and_clause_from": [
+    "gpt_mg/version0_6/service_list_ver1.5.4_value.json",
+    "gpt_mg/version0_6/service_list_ver1.5.4_function.json"
+   ],
+   "natural_from": [
+    "premapping/data/service_list_ver1.1.7_eng.json",
+    "premapping/data/path_controlled/query_roles.json"
+   ]
+  },
+  "recipe": {
+   "warmup_ratio": 0.1,
+   "max_seq_length": 256,
+   "uniform_batch": null,
+   "note": "only e5-small, the encoder the runtime uses, is fine-tuned; the other candidates are evaluated as released",
+   "caveat": "hyperparameters (10 epochs, lr 2e-5, 256 tokens) were tuned for e5-small and reused unchanged for every encoder; the *_val splits are built but not used for per-model selection",
+   "params": {
+    "e5": {
+     "hf": "intfloat/e5-small",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "mxbai": {
+     "hf": "mixedbread-ai/mxbai-embed-xsmall-v1",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "multilingual": {
+     "hf": "intfloat/multilingual-e5-small",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "bge-m3": {
+     "hf": "BAAI/bge-m3",
+     "epochs": 10,
+     "batch": 8,
+     "lr": 2e-05
+    }
+   }
+  },
+  "split_fixes_enabled": true,
+  "role_snapped_queries": 218,
+  "split_role_mismatched_pairs": 0,
+  "pair_files": [
+   "premapping/data/integrated/finetune_pairs_split.jsonl",
+   "premapping/data/integrated/finetune_pairs_nosplit.jsonl"
+  ],
+  "checkpoint_suffix": "v7-fixroles",
+  "finetuned_jobs": [
+   "e5/split",
+   "e5/nosplit"
+  ],
+  "finetuning": []
+ },
+ "arms": [
+  {
+   "label": "intfloat/e5-small + BM25 (split)",
+   "key": "e5",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/e5-split-v7-fixroles",
+   "total": {
+    "nDCG@10": 0.9940657433960273,
+    "R@5": 1.0,
+    "R@10": 1.0,
+    "lat": 9.573663333333874,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.541679112273465,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.341754867668914,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.5254267384562725,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9932077142703588,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 11.526338143351799,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9947948773582671,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 10.247255483021338,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9950677507885534,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.74790697663474,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "intfloat/e5-small + BM25 (no split)",
+   "key": "e5",
+   "mode": "nosplit",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/e5-nosplit-v7-fixroles",
+   "total": {
+    "nDCG@10": 0.9809275986885353,
+    "R@5": 0.9877777777777778,
+    "R@10": 0.9980555555555556,
+    "lat": 7.693008828306725,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.395804436667494,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.287263367237207,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.399748147608162,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9728220452392827,
+     "R@5": 0.9827777777777779,
+     "R@10": 0.9977777777777779,
+     "lat": 7.572473440086469,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9626279675593751,
+     "R@5": 0.9683333333333334,
+     "R@10": 0.9944444444444446,
+     "lat": 7.55982418350565,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9831208266134901,
+     "R@5": 0.990186125211506,
+     "R@10": 0.9986463620981388,
+     "lat": 7.451833126863209,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "mxbai-embed-xsmall-v1 + BM25 (split)",
+   "key": "mxbai",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": false,
+   "model": "mixedbread-ai/mxbai-embed-xsmall-v1",
+   "total": {
+    "nDCG@10": 0.9914262755475162,
+    "R@5": 0.9993055555555557,
+    "R@10": 1.0,
+    "lat": 5.797658108349424,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 0.9974009137575455,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.08164735937255,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 4.50679518936975,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 0.9979030099634741,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 4.577005610785404,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9914501052803119,
+     "R@5": 0.9972222222222222,
+     "R@10": 1.0,
+     "lat": 6.854578480124474,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9896853174185548,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 6.7657991832432645,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9919536893736729,
+     "R@5": 0.999492385786802,
+     "R@10": 1.0,
+     "lat": 5.2154705035949345,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "multilingual-e5-small (split)",
+   "key": "multilingual",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": false,
+   "model": "intfloat/multilingual-e5-small",
+   "total": {
+    "nDCG@10": 0.9899798427889906,
+    "R@5": 0.9975,
+    "R@10": 0.9995833333333334,
+    "lat": 8.70887226172878,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 0.9974009137575455,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.73894053494925,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9601199571897003,
+     "R@5": 0.9905660377358491,
+     "R@10": 1.0,
+     "lat": 7.548687933452147,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 0.9979030099634741,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.384597053963013,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9857660884985452,
+     "R@5": 0.9944444444444446,
+     "R@10": 0.9983333333333333,
+     "lat": 9.6008557434349,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9919349335813424,
+     "R@5": 0.9988888888888887,
+     "R@10": 1.0,
+     "lat": 9.242812496765207,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9910754515894108,
+     "R@5": 0.9978003384094755,
+     "R@10": 0.999492385786802,
+     "lat": 7.85452503862266,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "BAAI/bge-m3 (split)",
+   "key": "bge-m3",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": false,
+   "model": "BAAI/bge-m3",
+   "total": {
+    "nDCG@10": 0.9923148149905678,
+    "R@5": 0.9981944444444446,
+    "R@10": 0.9995833333333334,
+    "lat": 15.10245549667161,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 14.846893620159161,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9601199571897003,
+     "R@5": 0.9905660377358491,
+     "R@10": 1.0,
+     "lat": 13.562889678517953,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 0.998951504981737,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 13.487587991469562,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9901948475006115,
+     "R@5": 0.9961111111111113,
+     "R@10": 0.9983333333333333,
+     "lat": 19.87275662327496,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9943855950760606,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 16.19551892314727,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9933916093831998,
+     "R@5": 0.9984771573604061,
+     "R@10": 0.999492385786802,
+     "lat": 14.492036869068663,
+     "n": 985
+    }
+   }
+  }
+ ]
+}

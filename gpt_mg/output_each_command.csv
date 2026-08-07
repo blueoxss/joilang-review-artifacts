@@ -1,4 +1,0 @@
-﻿sentence,model,generated_code
-불을 꺼줘,version0_6,"[{'name': '불꺼기', 'cron': '', 'period': -1, 'code': '(#Light).switch_off()'}]"
-sentence,model,generated_code
-32,version0_6,"[{'name': 'UndefinedCommand', 'cron': '', 'period': -1, 'code': ''}]"

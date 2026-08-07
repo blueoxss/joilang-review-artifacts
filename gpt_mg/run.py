@@ -1,13 +1,12 @@
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, AuthenticationError
 import os
 import sys
 import time
 import importlib
+import inspect
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -19,13 +18,15 @@ api_key = (
 )
 
 if not api_key:
-    raise RuntimeError("OpenAI API key is not configured")
+    # a missing key is a configuration refusal like every other one this CLI
+    # makes, not a crash: one line naming what to set, exit 1, no traceback
+    raise SystemExit("OpenAI API key is not configured; set OPENAI_API_KEY (see README)")
 
 os.environ["OPENAI_API_KEY"] = api_key
 client = OpenAI(api_key=api_key)
 
 import pandas as pd
-import json, ast, requests
+import json, ast
 from datetime import datetime
 from tqdm import tqdm
 import csv
@@ -33,135 +34,289 @@ import re
 
 
 model_default = 'version0_6'
-feedback=0
+# Raw request/response objects are diagnostics, not the run's output: they are
+# printed only when JOI_DEBUG is set, so what stdout shows for a normal run is
+# the generated scenario and the pre-mapping lines that explain it.
+DEBUG = os.getenv("JOI_DEBUG", "0").strip().lower() in ("1", "true", "yes")
+
+
+def debug_print(*parts):
+    if DEBUG:
+        print(*parts)
+
+
+# Service Pre-mapping (default: e5-small + BM25, VALUE/FUNCTION split, w=0.6).
+# Enable with `--premap` (or JOI_PREMAP=1). Select the retriever with
+# `--premap-model {e5-small|mxbai-embed-xsmall-v1|multilingual-e5-small|bge-m3|<path>}`
+# and `--premap-mode {split|nosplit}` (or JOI_PREMAP_MODEL / JOI_PREMAP_MODE).
+PREMAP_MODEL = os.getenv("JOI_PREMAP_MODEL") or None
+PREMAP_MODE = os.getenv("JOI_PREMAP_MODE") or None
+# Selecting a retriever enables pre-mapping, exactly as --premap-model /
+# --premap-mode do, so neither surface can ask for a retriever and be ignored.
+PREMAP_ENABLED = (
+    os.getenv("JOI_PREMAP", "0").strip().lower() in ("1", "true", "yes")
+    or bool(PREMAP_MODEL) or bool(PREMAP_MODE)
+)
 all_items = []
 choice_no = 0
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 #from Evaluation.compare_soplang_ir import compare_codes
-def _normalize_version014_generated_code(model: str, generated_code):
-    if "version0_14" not in str(model):
-        return generated_code
+# the second run log, named once: generation writes it from inside
+# generate_joi_code, and the CLI reads its header before the first request
+SENTENCE_LOG_NAME = "sentence_best_code_log.csv"
+SENTENCE_LOG_FIELDS = ["sentence", "best_code"]
+
+
+def _run_log_path(filename):
+    """A run log is written next to run.py, whatever the working directory is."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+
+
+def _log_needs_header(path, fieldnames):
+    """True when the run log still needs its header row; refuses a foreign one.
+
+    Both logs below are appended to when they already exist, so the header on
+    disk is what the appended rows are read against. A file carrying different
+    columns is refused in the same one line as a log this run cannot write:
+    appending would leave rows that no longer match the header above them, and
+    nothing downstream could tell the two apart.
+    """
+    if not os.path.isfile(path):
+        return True
     try:
-        from gpt_mg.version0_14.utils.pipeline_common import normalize_candidate_json_text
-    except Exception:
-        try:
-            from version0_14.utils.pipeline_common import normalize_candidate_json_text
-        except Exception:
-            return generated_code
-
-    if generated_code in ("", None):
-        return generated_code
-
-    try:
-        if isinstance(generated_code, list):
-            if not generated_code:
-                return generated_code
-            payload_text = json.dumps(generated_code[0], ensure_ascii=False)
-            normalized_text = normalize_candidate_json_text(payload_text, default_cron="", default_period=0)
-            parsed = json.loads(normalized_text)
-            return [parsed] if isinstance(parsed, dict) else generated_code
-        if isinstance(generated_code, dict):
-            payload_text = json.dumps(generated_code, ensure_ascii=False)
-            normalized_text = normalize_candidate_json_text(payload_text, default_cron="", default_period=0)
-            parsed = json.loads(normalized_text)
-            return parsed if isinstance(parsed, dict) else generated_code
-        if isinstance(generated_code, str):
-            normalized_text = normalize_candidate_json_text(generated_code, default_cron="", default_period=0)
-            try:
-                parsed = json.loads(normalized_text)
-                if isinstance(parsed, dict):
-                    return [parsed]
-            except Exception:
-                return generated_code
-    except Exception:
-        return generated_code
-
-    return generated_code
+        with open(path, "r", newline='', encoding="utf-8-sig") as f:
+            header = next(csv.reader(f), None)
+    except OSError as exc:
+        raise SystemExit(
+            f"cannot read the run log {path}: {exc.strerror}; check the file's permissions"
+        ) from exc
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f"the run log {path} is not valid UTF-8 ({exc}); move it aside"
+        ) from exc
+    if header is None:
+        return True                 # an empty file is a log that never got its header
+    if header != list(fieldnames):
+        raise SystemExit(
+            f"the run log {path} holds columns {header}, not {list(fieldnames)}; "
+            "move it aside or point the run at another file"
+        )
+    return False
 
 
-def save_sentence_and_code(sentence, best_code, filename="sentence_best_code_log.csv"):
+def save_sentence_and_code(sentence, best_code, filename=SENTENCE_LOG_NAME):
     """
     입력 sentence와 best_code를 한 파일에 누적으로 저장 (중복 허용)
+
+    The header is read again here for the row this call may have to write; the
+    refusal it can raise has already been raised by the caller, before the
+    model was called.
     """
-    filename = os.path.join(os.path.dirname(__file__), filename)
-    file_exists = os.path.isfile(filename)
+    filename = _run_log_path(filename)
+    needs_header = _log_needs_header(filename, SENTENCE_LOG_FIELDS)
     #print(filename)
-    with open(filename, "a", newline='', encoding="utf-8-sig") as f:
+    try:
+        f = open(filename, "a", newline='', encoding="utf-8-sig")
+    except OSError as exc:
+        # a log this run cannot write is a configuration error like the ones the
+        # CLI names above, not a crash: the model call has already been paid for
+        # by the time it lands, so it is refused in one line naming the file
+        raise SystemExit(
+            f"cannot write the run log {filename}: {exc.strerror}; check the file's permissions"
+        ) from exc
+    with f:
         writer = csv.DictWriter(f, fieldnames=["sentence", "best_code"])
-        if not file_exists:
+        if needs_header:
             writer.writeheader()
         writer.writerow({"sentence": sentence, "best_code": best_code})
 
-def move_global_assignments(response_text):
-    # 코드블럭만 추출
-    code_block = re.search(r"```(.*?)```", response_text, re.DOTALL)
-    if not code_block:
-        return response_text  # 코드블럭 없으면 그대로 반환
+def _known_version_dirs():
+    """The version directories shipped next to run.py, by name.
 
-    code_content = code_block.group(1).strip()
-    lines = code_content.split('\n')
+    A version is a directory holding a ``config_loader``, so that file is what
+    is looked for rather than a hardcoded list that a new directory would leave
+    out of the refusal below.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        names = os.listdir(here)
+    except OSError:
+        return []
+    return sorted(n for n in names
+                  if os.path.isfile(os.path.join(here, n, "config_loader.py")))
 
-    # code=의 위치 찾기
-    code_eq_idx = None
-    # := 패턴을 찾고, 해당 줄의 인덱스와 내용 저장
-    assignment_lines = []
-    assignment_idxs = []
 
-    for i, line in enumerate(lines):
-#        print(f"Checking line {i}: {line}")
-        if re.match(r'^\s*code\s*=', line):
-            code_eq_idx = i
-            print("Code= found at line:", i)
-            break
-        if re.match(r'^\s*\w+\s*:=\s*.+$', line):
-            assignment_lines.append(line)
-            assignment_idxs.append(i)
-    if code_eq_idx is None:
-        return response_text  # code= 없으면 그대로 반환
+def _import_version_loader(model):
+    """Import a version directory's ``config_loader``, naming a bad directory.
 
-    # 해당 줄 제거
-    for idx in reversed(assignment_idxs):
-        del lines[idx]
-    print('All lines after deletion:\n')
-    for idx, line in enumerate(lines):
-        print(f'line[{idx}]: {line}')
-    # code= 바로 뒤에 삽입
-    insert_idx = code_eq_idx - 1
-    print("insert_idx: ", insert_idx)
-    print("assignment lines : ", assignment_lines)
-    lines[insert_idx:insert_idx] = assignment_lines
+    The CLI resolves the version this way before the first request as well, so
+    an unknown directory is refused where the other configuration arguments
+    are - not after the command has been echoed and the model called.
+    """
+    model_path = f"{model}.config_loader"
+    try:
+        return importlib.import_module(model_path)
+    except ModuleNotFoundError as exc:
+        # a version directory that does not exist is a configuration error, and
+        # is reported as one here rather than as an import traceback; a missing
+        # import *inside* the loader is a different failure and stays raw
+        if exc.name and not model_path.startswith(exc.name):
+            raise
+        # naming the cause alone leaves the reader guessing at the spelling, so
+        # the names this CLI does accept are listed with it
+        known = _known_version_dirs()
+        hint = (f"; available here: {', '.join(known)}" if known else
+                "; no directory next to run.py holds a config_loader.py")
+        raise SystemExit(
+            f"unknown version directory {model!r}: no module {model_path!r}{hint}"
+        ) from exc
 
-    # 최종 문자열 복원
-    new_code = '\n'.join(lines)
-    # 원본의 ```~``` 포맷에 맞게 반환
-    return f"```\n{new_code}\n```"
 
-def generate_joi_code(sentence: str, model: str, connected_devices: dict, current_time: str, other_params: dict = None) -> dict:
+def generate_joi_code(sentence: str, model: str, connected_devices: dict, current_time: str = None, other_params: dict = None) -> dict:
     # 1. 메시지 구성
     start = time.perf_counter()
+    # the prompt carries a real timestamp even when the caller has none, so a
+    # single-command run never sends the literal "Current Time: None"
+    current_time = current_time or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     #from version0_1.config_loader import load_version_config
     #model_path = f"gpt_mg.{model}.config_loader"
-    model_path = f"{model}.config_loader"
-    print("Model Path :: ", model_path)
-    config_loader_module = importlib.import_module(model_path)
+    debug_print("Model Path :: ", f"{model}.config_loader")
+    config_loader_module = _import_version_loader(model)
     load_version_config = getattr(config_loader_module, 'load_version_config')
     path_tmp = '.'#os.path.join("gpt_mg",version_path,"config_loader")
-    choice_responses = []
+
+    premap_services, premap_meta = None, None
+    if PREMAP_ENABLED:
+        try:
+            import premap as premap_mod
+        except ImportError:
+            from gpt_mg import premap as premap_mod
+        version_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), model.split('.')[-1])
+        try:
+            premap_services, premap_meta = premap_mod.premap_from_version_dir(
+                sentence, version_dir, model=PREMAP_MODEL, mode=PREMAP_MODE)
+        except (OSError, ValueError, TypeError) as exc:
+            # a version directory whose catalogs are missing, unreadable or not
+            # shaped like a catalog is a configuration error, and is named as one
+            # rather than left to reach the operator as a traceback out of the
+            # retrieval stack. The three are one class from where the operator
+            # stands - the catalog file is wrong - and premap.py's own message
+            # already names the offending row, so the traceback adds only
+            # internals. premap.py refuses the same input the same way.
+            raise SystemExit(str(exc)) from exc
+        # What reaches the prompt is decided before anything is printed, so the
+        # first line an operator reads is the one that says it. A shortlist can
+        # be withheld for two reasons - a role whose scores separated nothing
+        # (config_loader keeps the full catalog for it), or a version whose
+        # loader predates the shortlist entirely - and a line that listed the
+        # candidates either way would show an operator a shortlist the prompt
+        # never carried.
+        supported = "premap_services" in inspect.signature(load_version_config).parameters
+        unranked = list(premap_meta.get("no_match") or ())
+        shortlist = list(premap_meta.get("selected") or ())
+        if not supported:
+            applied_entries, withheld = [], f"{model_path}.load_version_config takes no premap_services"
+            premap_services = None
+        else:
+            # an entry is named "<role>:<device>.<service>", and only the roles
+            # absent from no_match are the ones config_loader substitutes
+            applied_entries = [e for e in shortlist if e.split(":", 1)[0] not in unranked]
+            withheld = ("no ranking signal for " + ", ".join(unranked)) if unranked else ""
+        # "n of m" rather than a bare count: a role that ranked nothing has no
+        # candidates to withhold, and "0 of 6" says that where "0 withheld"
+        # would read as though nothing had been held back at all
+        count = f"{len(shortlist) - len(applied_entries)} of {len(shortlist)} candidates withheld"
+        # the line already names the roles it withheld, so its own grammar
+        # follows how many there were rather than reading "those roles" over one
+        those_roles = "those roles" if len(unranked) > 1 else "that role"
+        # a role can rank on very little and still rank. Where the command's
+        # script is not the encoder's, the dense half has no training signal to
+        # contribute and the sparse half carries the ranking alone - often off a
+        # single incidental Latin token - yet no role lands in no_match and the
+        # shortlist is applied in full. The notes line below reports it, but an
+        # operator reads the shortlist on THIS line and reaches that one only
+        # afterwards, so the qualification is put where the shortlist is rather
+        # than under it. The line stays unchanged where no such note was raised.
+        thin = ""
+        if any(str(n).startswith("non_latin_query_on_english_encoder")
+               for n in (premap_meta.get("notes") or ())):
+            thin = "thin signal - the command's script is not the encoder's"
+        if not withheld:
+            if thin:
+                print("Premap ::", premap_meta.get("backend"), applied_entries,
+                      f"({thin})")
+            else:
+                print("Premap ::", premap_meta.get("backend"), applied_entries)
+        elif applied_entries:
+            detail = f"{count} - {withheld}; full catalog kept for {those_roles}"
+            if thin:
+                detail += f"; {thin}"
+            print("Premap ::", premap_meta.get("backend"), applied_entries,
+                  f"({detail})")
+        else:
+            print("Premap ::", premap_meta.get("backend"),
+                  f"[unused - {withheld}; full catalog kept]", f"({count})")
+        # a backend naming no encoder says the dense half did not run; it does
+        # not say why, and the causes need different fixes (a contended GPU, an
+        # uninstalled package, a model id that resolves to nothing). The reason
+        # is printed next to the line that raised the question rather than left
+        # for a JOI_DEBUG rerun.
+        #
+        # effective_search names the STRONGEST search any role's ranking came
+        # from, so degradation that strikes one role and leaves the other
+        # blended does not move it. Testing it alone stayed silent in exactly
+        # the case worth reading about: a backend string advertising an encoder
+        # half the shortlist never used, a notes line raising the question, and
+        # the reason for it reachable only by re-running under JOI_DEBUG. Every
+        # role that fell short of the configured search is named instead -
+        # including a role that reached no search at all, an empty catalog
+        # being a shortfall like any other.
+        configured = premap_meta.get("configured_search")
+        effective = premap_meta.get("effective_search")
+        # reported only where the roles differ; where they agree the run-level
+        # comparison above already covers them
+        role_search = premap_meta.get("role_search") or {}
+        short = sorted(r for r, s in role_search.items() if s != configured)
+        if effective != configured or short or premap_meta.get("fallback"):
+            reason = premap_meta.get("fallback") or "no reason recorded"
+            if effective != configured:
+                scope = f"degraded to {effective}"
+            elif short:
+                scope = "degraded for " + ", ".join(short)
+            else:
+                # a reason recorded while every role reached the configured
+                # search is not reachable today; printing it beats dropping it
+                scope = "degraded"
+            print(f"Premap :: {scope} (configured {configured}):", reason)
+        # the soft conditions are printed whether or not they cost a role its
+        # shortlist: a run that kept every shortlist can still have been scored
+        # on half the mix, and the operator sees that here
+        if premap_meta.get("notes"):
+            print("Premap :: notes:", premap_meta["notes"])
+        # "applied" answers what the prompt was built with, not what the loader
+        # would accept. premap already reports whether any role's shortlist
+        # reaches the prompt; the only thing it cannot know is whether THIS
+        # version's loader takes one at all, which is what narrows it here.
+        premap_meta["applied"] = supported and bool(premap_meta.get("applied"))
+    premap_kwargs = {"premap_services": premap_services} if (premap_meta or {}).get("applied") else {}
+
     start_infer = time.perf_counter()
-    #feedback = 1
-    if feedback == 1:
-        fd_prompt = """\n\n ---\n Generate JOI Lang code for the following natural language instruction.  
-Provide three of the most likely or appropriate code translations, depending on confidence.  
-Output the results as a list under a "choices" key, where each item contains only the JOI Lang code snippet."""
-        config, model_input = load_version_config(f"Current Time: {current_time}\n\nGenerate JOI Lang code for Natural Language: {sentence}. {fd_prompt}", \
-                                        connected_devices, other_params, path_tmp)
-    else:
+    try:
         config, model_input = load_version_config(f"Current Time: {current_time}\n\nGenerate JOI Lang code for Natural Language: {sentence}", \
-                                                connected_devices, other_params, path_tmp)
+                                            connected_devices, other_params, path_tmp, **premap_kwargs)
+    except (OSError, ValueError, TypeError) as exc:
+        # same refusal as the pre-mapping call above, for the same class of
+        # input: a version directory whose prompt assets are missing, unreadable
+        # or not the JSON they claim to be. The loader's message already names
+        # the offending file, so the traceback adds only internals - and this
+        # path had been the one place the CLI let that class through raw.
+        raise SystemExit(str(exc)) from exc
     logs={}
     end_infer = time.perf_counter()
     logs["inference_time"] = f"{end_infer - start_infer:.4f} seconds"
+    if premap_meta is not None:
+        logs["premap"] = premap_meta
 
     # 2. 모델 호출
     response = {}
@@ -171,158 +326,55 @@ Output the results as a list under a "choices" key, where each item contains onl
     choice_no = 0
     try:
         response = client.chat.completions.create(**model_input)
-        print("Response:: ", response)
+        debug_print("Response:: ", response)
 
-        #print("Output:: >> ", response)
-        if (feedback == 1) and not (choice_no):
-            # 저장 폴더 경로 (필요시 변경)
-            for ch_idx in range(len(response.choices)):
-                #response.choices[ch_idx].message.content = move_global_assignments(response.choices[ch_idx].message.content)
-                #cleaned = re.sub(r"json|", "", response.choices[ch_idx].message.content).replace("```", "").strip()
+        try:
+            generated_code = response.choices[0].message.content
+            print("Response Content :: ", generated_code)
+            if isinstance(generated_code, dict):
+                generated_code = generated_code.get("choices", "")
+            # ✅ Case 1: Triple backtick with json block
+            if generated_code.strip().startswith("```json"):
+                # Remove ```json and final ```
+                cleaned = re.sub(r"^```json", "", generated_code)
+                cleaned = re.sub(r"```$", "", cleaned)
 
-                raw_content = response.choices[ch_idx].message.content
+            # ✅ Case 2: Pipe-prefixed format (e.g., "json|{ ... }")
+            elif generated_code.strip().startswith("json|"):
+                # Remove only the "json|" part
+                cleaned = generated_code.strip()[len("json|"):].strip()
 
-                # ✅ Case 1: Triple backtick with json block
-                if raw_content.strip().startswith("```json"):
-                    # Remove ```json and final ```
-                    cleaned = re.sub(r"^```json", "", raw_content.strip())
-                    cleaned = re.sub(r"```$", "", cleaned).strip()
+            # ✅ Case 3: Already-clean content
+            else:
+                cleaned = generated_code.strip()
 
-                # ✅ Case 2: Pipe-prefixed format (e.g., "json|{ ... }")
-                elif raw_content.strip().startswith("json|"):
-                    # Remove only the "json|" part
-                    cleaned = raw_content.strip()[len("json|"):].strip()
-
-                # ✅ Case 3: Already-clean content
-                else:
-                    cleaned = raw_content.strip()
-
-                # ✅ Optional: Handle custom JOI pre-processing if needed
-                cleaned = move_global_assignments(cleaned)
-
-                data = json.loads(cleaned)
-                choice_responses = data["choices"]
-                #print(f"ch_idx-{ch_idx}-{len(choice_responses)},  ::\n  {choice_responses}")
-                if len(choice_responses):
-                    all_items.extend(choice_responses)
-                else:
-                    break
-            print("Response JSON :: ", data)
-    
-            output_path = "./joi_outputs/choices_result.joi"
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            # code 별도 텍스트 파일에 실제 줄바꿈 살려 저장
-            #print("저장 경로:", output_path)
-            try:
-                with open(output_path, "a", encoding="utf-8") as f_code:
-                    #print("# of all_items :: ", len(all_items), flush=True)
-                    f_code.write(f"{{command : {sentence}}}\n")
-                    for item in all_items:
-                        try:
-                            #print(item)
-                            f_code.write(f", {{\nname : {item['name']}\n")
-                            if item['cron']:
-                                f_code.write(f"cron : {item['cron']}\n")
-                            else:
-                                f_code.write(f"cron : ""\n")
-                            f_code.write(f"period : {item['period']}\n")
-                            f_code.write(f"code : \n")
-                            code_text = item['code']
-                            # 백슬래시 두 개 + n 으로 되어 있으면 실제 줄바꿈으로 변환sor
-                            if "\\n" in code_text:
-                                code_text = code_text.replace("\\n", "\n")
-                            # 혹시 \r\n 같은 윈도우 개행도 정리 (선택사항)
-                            code_text = code_text.replace("\r\n", "\n")
-                            indented_code = '\n'.join('    ' + line for line in code_text.split('\n'))
-                            f_code.write(indented_code + "\n}\n\n")
-                        except Exception as e:
-                            print(f"Error writing item {item.get('name', '')}: {e}")
-            except Exception as e:
-                print("파일 열기 또는 쓰기 실패:", e)
-        else:
-            #generated_code = response.get("code", "")
-    #except Exception as e:
-            try:
-                #print("exception in response:", e)
-                
-                generated_code = response.choices[0].message.content
-                print("In exception, Response Content :: ", generated_code)
-                #generated_code = move_global_assignments(generated_code)
-                if isinstance(generated_code, dict):
-                    generated_code = generated_code.get("choices", "")
-                #generated_code = to_json_style_string(generated_code)
-                if generated_code.strip().startswith("```json"):
-                    # Remove ```json and final ```
-                    cleaned = re.sub(r"^```json", "", generated_code)
-                    cleaned = re.sub(r"```$", "", cleaned)
-
-                # ✅ Case 2: Pipe-prefixed format (e.g., "json|{ ... }")
-                elif generated_code.strip().startswith("json|"):
-                    # Remove only the "json|" part
-                    cleaned = generated_code.strip()[len("json|"):].strip()
-
-                # ✅ Case 3: Already-clean content
-                else:
-                    cleaned = generated_code.strip()
-                
-                # ✅ 문자열 → dict로 파싱
-                                                
-
-                def fix_multiline_code_json(json_str):
-                    # "code": "..." 안의 멀티라인 실제 줄바꿈을 \n 으로 치환
-                    
-                    # 정규식으로 "code": "..." 구간 찾기 (멀티라인 포함)
-                    pattern = r'("code"\s*:\s*")([\s\S]*?)(")'
-
-                    def replacer(match):
-                        prefix = match.group(1)
-                        content = match.group(2)
-                        suffix = match.group(3)
-
-                        # 실제 줄바꿈을 \n 으로 변환
-                        content_fixed = content.replace('\n', '\\n').replace('\r', '\\r').replace('"', '\\"')
-                        return f'{prefix}{content_fixed}{suffix}'
-
-                    fixed_json = re.sub(pattern, replacer, json_str)
-                    return fixed_json
-
-                # 사용 예시
-                cleaned_fixed = fix_multiline_code_json(cleaned)
-
-                    
-                parsed = json.loads(cleaned_fixed)
-                all_items.append(parsed)
-                '''
-                choice_responses = parsed.get("choices", [])
-                if isinstance(choice_responses, list):
-                    all_items.extend(choice_responses)
-                else:
-                    print("Warning: 'choices' is not a list.")
-                '''
-                choice_no=0
-            except Exception as e:
-                #print(generated_code)
-                #print('----')
-                #print(all_items)
-                print("## <<2. generate_joi_code>> \n Error in generate_joi_code:", e)
-                logs["error"] = f"response_parse_failed: {e}"
-                generated_code = {}
+            # ✅ 문자열 → dict로 파싱
+            # The model sometimes writes real newlines inside the "code" string
+            # instead of \n escapes. strict=False accepts literal control
+            # characters inside JSON strings, so the text is parsed as it stands
+            # and no regex repairs it first - a quote-terminated one stops at the
+            # first escaped \" inside the code and leaves every newline after it.
+            parsed = json.loads(cleaned, strict=False)
+            all_items.append(parsed)
+        except Exception as e:
+            # the model returned something this branch could not read as a
+            # scenario. The operator line carries the same classification as the
+            # log, so the parser's own message ("Expecting value: line 1 column
+            # 1 (char 0)") arrives named rather than as a bare exception that
+            # reads like a crash in the retrieval or prompt code above it.
+            logs["error"] = f"response_parse_failed: {e}"
+            print("## <<2. generate_joi_code>> \n", logs["error"])
+    except AuthenticationError as e:
+        # a key the API rejects is a configuration error, exactly like a missing
+        # one, and is raised as one here: logging it as a sentence that generated
+        # nothing would write an empty row and exit 0 on a run that never reached
+        # the model
+        raise SystemExit(f"OpenAI rejected the API key: {e}")
     except Exception as e:
         print("exception in response:", e)
         logs["error"] = f"model_call_failed: {e}"
-    #print("Length of Created Code :: ", len(all_items))
-    #if feedback == 1:
-    #    for idx, generated_code in enumerate(choice_responses):
-    #        print(f"Each Code {idx}:: {generated_code}")
-    # ✅ Case Next: 선택된 결과가 있을 경우, choice_responses에서 첫 번째로 직접 설정
-    if len(choice_responses) >= 1:
-        generated_code = choice_responses#[choice_no]
-    elif len(all_items) >= 1:
-        generated_code = all_items#[choice_no]
-    else:
-        generated_code = ""
-
-    generated_code = _normalize_version014_generated_code(model, generated_code)
+    # 후보 목록이 곧 결과: 파싱에 실패하면 빈 문자열
+    generated_code = all_items if all_items else ""
 
     end = time.perf_counter()
     logs["response_time"] = f"{end - start:.4f} seconds"
@@ -358,172 +410,6 @@ Output the results as a list under a "choices" key, where each item contains onl
         "log": logs
     }
 
-def get_script_gpt(sentence, version_path=model_default): #[TODO] 경로 입력받도록 수정
-    # 1. 메시지 구성
-    start = time.perf_counter()
-    #from version0_1.config_loader import load_version_config
-    config_loader_module = importlib.import_module(f"gpt_mg.{version_path}.config_loader")
-    load_version_config = getattr(config_loader_module, 'load_version_config')
-    path_tmp = '.'#os.path.join("gpt_mg",version_path,"config_loader")
-    config, model_input = load_version_config(sentence, path_tmp)
-    logs={}
-
-    # 2. 모델 호출
-    response = client.chat.completions.create(**model_input)
-
-    # 3. 서버 전송을 위한 매핑
-    logs["device_name"] = config["device_name"]
-    best_code = response.choices[0].message.content.strip() #content
-    logs["translated_sentence"] = ""
-    logs["mapped_devices"] = ""
-    logs["best_code"] = best_code
-    
-    end = time.perf_counter()
-    logs["response_time"] = f"{end - start:.4f} seconds"
-    logs["prompt_tokens"] = response.usage.prompt_tokens
-    logs["completion_tokens"] = getattr(response.usage, "completion_tokens", "")
-    logs["total_tokens"] = response.usage.total_tokens
-
-    print("Prompt tokens:", logs["prompt_tokens"])
-#    print(f"Completion tokens: {logs["completion_tokens"]}")
-    print("Total tokens:", logs["total_tokens"])
-
-    return logs
-
-def concat_list_to_string(lst):
-    # 각 인덱스에 맞게 prefix 붙이기
-    result = []
-    for i, item in enumerate(dataset):
-        result.append(f"command{i+1}: {item}")
-
-    # ,로 구분하고 [ ]로 감싸기
-    final_string =[ " + ", ".join(result) + " ]
-def concat_df_to_string(df):
-    result = []
-    for i, row in enumerate(df.iterrows()):
-        idx, data = row
-        item = data['command']
-        prefix = f"command{i+1}:" if i % 2 == 0 else f"command{i+1};"
-        result.append(f"{prefix} {item}")
-
-    final_string = "Please convert each of the following command statements into JoILang code, and return them as a list one JoILang script per command. " \
-        + "[" + ", ".join(result) + "]"
-
-def check_service_consistency(service_list, basepath='../datasets/'):
-    """
-    service_list: 코드에서 추출한 서비스 이름(str) 리스트
-    basepath: 서비스 json 파일이 있는 경로
-    """
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    function_path = os.path.join(BASE_DIR, basepath, 'service_list_ver1.5.4_function.json')
-    value_path = os.path.join(BASE_DIR, basepath, 'service_list_ver1.5.4_value.json')
-    with open(function_path, encoding='utf-8') as f:
-        function_json = json.load(f)
-    with open(value_path, encoding='utf-8') as f:
-        value_json = json.load(f)
-    # 모든 서비스 이름 set으로
-    valid_services = set()
-    for item in function_json:
-        if "service" in item:
-            valid_services.add(item["service"])
-    for item in value_json:
-        if "service" in item:
-            valid_services.add(item["service"])
-    # 검사
-    for service in service_list:
-        if service not in valid_services:
-            return 1  # 불일치
-    return 0  # 모두 일치
-
-def extract_services_from_code(code_value):
-    # (#...여러개태그...) . 서비스이름(
-    # 예: (#Door #Odd).doorControl_door == "closed"
-    #     (#Arm).armControl_raise()
-    #     (#A #B).service_name(
-    pattern = r'\((#[^)]*)\)\.([a-zA-Z0-9_]+)\s*\('
-    return [m[1] for m in re.findall(pattern, code_value)]
-
-def to_json_style_string(generated_code):
-    # 리스트라면 첫 번째 요소를 꺼냄
-    if isinstance(generated_code, list):
-        if generated_code:
-            generated_code = generated_code[0]
-        else:
-            generated_code = ""
-    code = generated_code.strip()
-    # 맨 앞/뒤에 ``` 있으면 제거
-    if code.startswith("```"):
-        code = code[3:]
-    if code.endswith("```"):
-        code = code[:-3]
-    code = code.strip()
-    # 중괄호 있으면 제거
-    if code.startswith("{") and code.endswith("}"):
-        code = code[1:-1].strip()
-
-    # 초기화
-    fields = {"name": "", "cron": "", "period": "", "code": ""}
-    lines = code.splitlines()
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        # "name": ... 또는 name = ... 모두 지원
-        m = re.match(r'^"?name"?\s*[:=]\s*(.*?)(,)?$', line)
-        if m:
-            value = m.group(1).strip().strip(',')
-            value = value.strip('"')
-            fields["name"] = f'"{value}"'
-            i += 1
-            continue
-        m = re.match(r'^"?cron"?\s*[:=]\s*(.*?)(,)?$', line)
-        if m:
-            value = m.group(1).strip().strip(',')
-            value = value.strip('"')
-            fields["cron"] = f'"{value}"'
-            i += 1
-            continue
-        m = re.match(r'^"?period"?\s*[:=]\s*(.*?)(,)?$', line)
-        if m:
-            value = m.group(1).strip().strip(',')
-            # 숫자만 추출, 이미 따옴표 있으면 제거
-            value = value.strip('"')
-            fields["period"] = value
-            i += 1
-            continue
-        # code 필드 (여러 줄)
-        m = re.match(r'^"?code"?\s*[:=]\s*(.*)$', line)
-        if m:
-            value = m.group(1).strip().strip(',')
-            code_lines = []
-            if value:
-                code_lines.append(value)
-            i += 1
-            # 다음 필드가 나오기 전까지 모두 code로
-            while i < len(lines):
-                next_line = lines[i].strip()
-                if re.match(r'^"?name"?\s*[:=]', next_line) or \
-                   re.match(r'^"?cron"?\s*[:=]', next_line) or \
-                   re.match(r'^"?period"?\s*[:=]', next_line) or \
-                   re.match(r'^"?code"?\s*[:=]', next_line):
-                    break
-                code_lines.append(next_line)
-                i += 1
-            code_value = "\n".join(code_lines).strip()
-            code_value = code_value.strip('"')
-            fields["code"] = f'"{code_value}"'
-            continue
-        i += 1
-    service_list = extract_services_from_code(fields["code"])
-    error = check_service_consistency(service_list, './version0_5')
-    if not error:
-        result = '{' + f'"name": {fields["name"]}, "cron": {fields["cron"]}, "period": {fields["period"]}, "code": {fields["code"]}' + '}'
-    else:
-        result = '{'+'}'
-    return result
-def clean_value(val):
-    if isinstance(val, str):
-        return val.strip().strip('"').strip(',')#.strip()
-    return val
 def merge_duplicate_blocks(generated_code):
     import re
     import json
@@ -605,20 +491,27 @@ def merge_duplicate_blocks(generated_code):
     # 3. 반환
     return json_result, 1 #cleaned_str, 1
 
-def benchmark_each_command():
-    # 실행
-    """
-    for data in dataset:
-        for model in paths:
-            print("\n", model)
-            get_script_gpt(data, model)
-    """
-    with open("../datasets/things.json", "r") as f:
+def benchmark_each_command(model=model_default):
+    # 실행 (assets are resolved next to run.py, so the cwd does not decide
+    # which dataset is read or where the results land)
+    datasets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datasets")
+    things_path = os.path.join(datasets_dir, "things.json")
+    f_file_name = os.path.join(datasets_dir, "final_output_250630_test.csv")
+    # this mode's dataset is not part of the artifact: the missing files are
+    # named in one line, where a traceback out of the first open() would leave
+    # the reader to work out which mode they had fallen into
+    missing = [p for p in (things_path, f_file_name) if not os.path.isfile(p)]
+    if missing:
+        raise SystemExit(
+            "batch-benchmark mode needs the datasets/ directory, which is not shipped here.\n"
+            "missing: " + ", ".join(os.path.normpath(p) for p in missing) + "\n"
+            'Use: run.py "<command>" | run.py dataset | run.py --premap <version> "<command>"'
+        )
+    with open(things_path, "r") as f:
         things = json.load(f)
     # print(things)
 
     #model = "Qwen2.5-Coder:7B"
-    model = model_default
     is_english = False
     if is_english:
         english = "_english"
@@ -626,7 +519,6 @@ def benchmark_each_command():
         english = ""
 
     # df = pd.read_excel("./final_output_250616.xlsx", engine='openpyxl')
-    f_file_name = "../datasets/final_output_250630_test.csv"
     df = pd.read_csv(f_file_name, encoding='utf-8-sig')
 
     # 출력 경로 생성 및 한 줄 실시간 기록
@@ -661,36 +553,31 @@ def benchmark_each_command():
             else:
                 try:
                     other_params = ast.literal_eval(other_params)
-                except:
+                except Exception as e:
+                    print(f"row {i}: options not parseable ({e}); using []")
                     other_params = []
 
             if isinstance(connected_devices, str) and not pd.isna(connected_devices) and connected_devices.strip():
                 try:
                     connected_devices = ast.literal_eval(connected_devices)
-                except:
+                except Exception as e:
+                    print(f"row {i}: connected_devices not parseable ({e}); using things.json")
                     connected_devices = things
             else:
                 connected_devices = things
 
-            payload = {
-                "sentence": sentence,
-                "model": model,
-                "connected_devices": connected_devices,
-                "current_time": current_time,
-                "other_params": other_params,
-            }
             merged = 0
             start = time.time()
             resp = generate_joi_code(sentence=sentence,\
-                                    model=model_default,\
+                                    model=model,\
                                     connected_devices= connected_devices,\
                                     current_time= current_time,\
                                     other_params= other_params)
-            #resp = requests.post("http://localhost:8000/generate_joi_code", json=payload)
             end = time.time()
             try:
                 generated_code = (resp.get("code", ""))
-            except:
+            except Exception as e:
+                print(f"row {i}: no code in the response ({e})")
                 generated_code = []
             #print("Output:: ", generated_code)
             if isinstance(generated_code, list):
@@ -704,10 +591,6 @@ def benchmark_each_command():
             else:
                 generated_code = str(generated_code)
 
-            """
-            if not merged:
-                generated_code = to_json_style_string(generated_code)
-            """
             resp_time = f"{end - start:.3f}"
 
             # gt = ast.literal_eval(row["joi_gt"])
@@ -732,17 +615,34 @@ def benchmark_each_command():
 
 
 def joilang_each_command(sentences, model=model_default):
-    output_path = "output_each_command.csv"
+    # written next to run.py, like sentence_best_code_log.csv: a run from
+    # another directory appends to the same log rather than starting a new one
+    output_path = _run_log_path("output_each_command.csv")
     fieldnames = ["sentence", "model", "generated_code"]
     if isinstance(sentences, str):
         sentences = [sentences]
     # 파일이 있으면 append, 없으면 write
-    file_exists = os.path.isfile(output_path)
-    mode = "a" if file_exists else "w"
+    needs_header = _log_needs_header(output_path, fieldnames)
+    # generation writes both logs, so both headers are read here, before the
+    # first request. sentence_best_code_log.csv is written from inside
+    # generate_joi_code, and a foreign header found only there would refuse a
+    # generation the model had already been paid for.
+    _log_needs_header(_run_log_path(SENTENCE_LOG_NAME), SENTENCE_LOG_FIELDS)
+    mode = "a" if os.path.isfile(output_path) else "w"
     resp = {}
-    with open(output_path, mode, newline='', encoding="utf-8-sig") as f:
+    try:
+        out = open(output_path, mode, newline='', encoding="utf-8-sig")
+    except OSError as exc:
+        # refused here, before the first request is sent: a run whose output the
+        # CLI cannot record is a configuration error, and naming it costs
+        # nothing where letting it through costs a generation per command
+        raise SystemExit(
+            f"cannot write the run log {output_path}: {exc.strerror}; check the file's permissions"
+        ) from exc
+    with out as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        if needs_header:
+            writer.writeheader()
         for sentence in sentences:
             try:
                 print("Input Sentence:: ", sentence)
@@ -750,47 +650,24 @@ def joilang_each_command(sentences, model=model_default):
                     sentence=sentence,
                     model=model,
                     connected_devices=None,
-                    current_time=None,
                     other_params=None #'user_id': "noname"'
-                )
-                print("Response:: ", resp)
+                )   # current_time defaults to now inside generate_joi_code
+                debug_print("Response:: ", resp)
                 generated_code = resp.get("code", "")
                 print("Output:: >> ", generated_code)
+            except (ValueError, TypeError, ImportError, OSError):
+                # a misconfiguration - an unknown pre-mapping mode, a missing
+                # version package, an unreadable catalog or prompt file - is not
+                # a sentence that generated nothing, and must not be logged as
+                # one: it is raised so the caller sees it and exits non-zero
+                raise
             except Exception as e:
+                # generation itself already logs its own failures inside
+                # generate_joi_code; whatever is left is per-sentence
                 print("## <<1. joilang_each_command>> \n Error :", e)
                 generated_code = ""
 
-            #############################              #############################
-            #############################  code 후처리  #############################
-            ''' # code 후처리
-            # merge_duplicate_blocks 적용
-            if isinstance(generated_code, list):
-                if generated_code:
-                    if (generated_code[0].count('"name"') < 2):
-                        generated_code = generated_code[0]
-                        merged = 0
-                    else:
-                        generated_code, merged = merge_duplicate_blocks(generated_code)
-                else:
-                    merged = 0
-                    generated_code = ""
-            else:
-                if (generated_code.count('"name"') >= 2):
-                    generated_code, merged = merge_duplicate_blocks(generated_code)
-                    merged = 0                    
-                else:
-                    merged = 0            
-            # to_json_style_string 적용
-            print(generated_code)
-            if not merged:
-                generated_code = to_json_style_string(generated_code)
-            #else:
-            #    generated_code = generated_code.strip()
-            #generated_code = json.loads(generated_code)
-            '''
-            #############################              #############################
-
-            print("Output to_json_style_string:: ", generated_code)
+            debug_print("Output row:: ", generated_code)
             writer.writerow({
                 "sentence": sentence,
                 "model": model,
@@ -800,7 +677,44 @@ def joilang_each_command(sentences, model=model_default):
     return resp
 
 if __name__ == '__main__':
-    args = sys.argv[1:] #(한글 자체의 모호성에 대해서 LLM 번역 전에, 번역한 다음에 모호성을 주는 것이 맞나?)
+    args = sys.argv[1:]
+    # the value-taking flags are read before --premap is dropped, so an option
+    # name standing where a value belongs is still visible as one
+    for _flag, _var in (('--premap-model', 'PREMAP_MODEL'), ('--premap-mode', 'PREMAP_MODE')):
+        if _flag in args:
+            _i = args.index(_flag)
+            # the next option is not this one's value: taking it as one would
+            # send an option name to the retriever as a model id or a mode. A
+            # blank value names neither, so it is missing too - premap.py reads
+            # its own --model / --mode by the same rule
+            if (_i + 1 >= len(args) or args[_i + 1].startswith('--')
+                    or not args[_i + 1].strip()):
+                raise SystemExit(f"{_flag} requires a value")
+            globals()[_var] = args[_i + 1]
+            del args[_i:_i + 2]
+            PREMAP_ENABLED = True
+    if '--premap' in args:
+        args.remove('--premap')
+        PREMAP_ENABLED = True
+    if PREMAP_ENABLED:
+        # the retriever's configuration is checked here, where the other
+        # argument errors are refused, so an unknown mode or a model named by an
+        # empty variable stops the run instead of surfacing later as a command
+        # that generated nothing
+        try:
+            import premap as _premap
+        except ImportError:
+            from gpt_mg import premap as _premap
+        try:
+            _premap.normalize_model(PREMAP_MODEL)
+            _premap.normalize_mode(PREMAP_MODE)
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+    if len(args) == 2:
+        # the version directory is the remaining configuration argument, so it
+        # is resolved here with the others: an unknown one named after the
+        # command has been echoed reads as a failure of the command
+        _import_version_loader(args[0])
     #dataset = ["if button 4 is swiped up, sound the alarm's siren.", '버튼4가 위로 스와이프되었으면 알람의 사이렌을 울려줘.']
     text = """블라인드가 열려 있고 조명이 꺼져 있으며 습도가 80% 이상이면 블라인드를 닫고 조명을 켜 줘. 창문이 닫혀 있고 에어컨이 꺼져 있으면 창문을 열고 에어컨을 켜 줘.
 TV가 꺼져 있고 커튼이 닫혀 있으며 선풍기가 꺼져 있으면 TV를 켜고 커튼을 열어 줘. 스피커가 재생 중이고 조명이 꺼져 있으면 조명을 켜고 블라인드를 닫아 줘.
@@ -818,12 +732,16 @@ TV가 켜져 있고 스피커가 꺼져 있으며 조명이 꺼져 있으면 스
 1초마다 확인하여 관개 장치가 꺼졌다 켜진 횟수가 4번을 초과하고 펌프가 2번 이상 작동했으면 블라인드를 닫고 커튼을 내려 줘.
 1초 주기로 확인해서 관개 장치가 직전에 꺼지고 이후 켜지는 횟수가 4번을 초과하고 펌프가 2번 이상 작동했으면 블라인드를 닫고 커튼을 내려 줘."""
     dataset = ['"' + line.strip() + '"' for line in text.strip().split('\n') if line.strip()]
-    print('args lenght:: ', len(args))
+    debug_print('args length:: ', len(args))
     if len(args) == 2:
         selected_model = args[0]
+        # a blank command names nothing to generate from: sent as one it comes
+        # back as a scenario built out of the prompt's boilerplate alone. premap.py
+        # refuses an empty query in the same one line, for the same reason.
+        if not args[1].strip():
+            raise SystemExit("empty command: pass the command to generate from")
         dataset = [args[1]]
         resp = joilang_each_command(dataset, selected_model)
-        paths = [selected_model]
 
         try_no = 0
         current_sentence = dataset[0]  # 요구사항 누적용
@@ -834,20 +752,22 @@ TV가 켜져 있고 스피커가 꺼져 있으며 조명이 꺼져 있으면 스
             else:
                 print(f"---\nCandidate #{choice_no+1}: {all_items[choice_no]}")
                 ###########################
-                ### re-converted sentence
+                ### re-converted sentence (optional; skipped if the module is absent)
                 response_kor = ""
-                model_path = f"version0_6_reconverted.config_loader"
-                config_loader_module = importlib.import_module(model_path)
-                load_version_config = getattr(config_loader_module, 'load_version_config')
+                try:
+                    model_path = f"{selected_model}_reconverted.config_loader"
+                    config_loader_module = importlib.import_module(model_path)
+                    load_version_config = getattr(config_loader_module, 'load_version_config')
 
-                config, model_input = load_version_config(f"""넌 한글 언어학자 마스터야.
+                    config, model_input = load_version_config(f"""넌 한글 언어학자 마스터야.
         {all_items[choice_no]}를 다시 한글 명령어로 바꿔서 아래 [ ] 를 채워줘. 단, 아래 조건들을 모두 만족하는, 한글 1~3 줄 커맨드로 구체적이고 정확하게 알아듣기 좋게 잘 변환해줘.
     all이나 any가 없는 경우 임의의 ~를 ~한다 임의의 ~가 ~를 만족하면과 같이 구체적으로 명시해줘. all/any도 마찬가지고.
     사용자 지정, 임의의 태그는 정확히 한글로 명시하는데, 특히 A, B, C와 같은 태그는 반드시 한글로 구분해줘. 예를 들어, 온실A, 온실B, 온실C와 같이.
     """) 
-    #'/geners~/{url_id, setnece0} 
-    #'/regenerated/{url_id, sentence0}
-                response_kor = client.chat.completions.create(**model_input)
+                    response_kor = client.chat.completions.create(**model_input)
+                except ModuleNotFoundError:
+                    print(f"{selected_model}_reconverted not found; skipping reverse translation.")
+                    response_kor = ""
                 if response_kor:
                     resp['log']['translated_sentence'] = response_kor.choices[0].message.content.strip() #content
                 else:
@@ -856,20 +776,35 @@ TV가 켜져 있고 스피커가 꺼져 있으며 조명이 꺼져 있으면 스
 
                 print("Reconverted Version of The Detailed Sentence: \n", resp['log']["translated_sentence"])
                 ###########################
-                answer = input("최종 결과에 만족하는가? (y: 저장 / n: 종료 / 엔터: 다음 / 요구사항: 요구사항 추가) >>> ")
-                
+                # the scenario is already printed and logged at this point; the
+                # follow-up loop is interactive, so a batch/CI run (no tty, or a
+                # closed stdin) stops here instead of dying on EOFError
+                if not sys.stdin.isatty():
+                    print("non-interactive run: first candidate printed, exiting.")
+                    break
+                try:
+                    answer = input(
+                        "Accept this result? "
+                        "(y: save / n: quit / Enter: next candidate / anything else: add a requirement) >>> ")
+                except EOFError:
+                    print("\nno input available; exiting.")
+                    break
+
+
                 if answer.lower() == 'y':
-                    save_sentence_and_code(current_sentence, all_items[choice_no])
+                    # logged as the one-element candidate list generation itself
+                    # writes, so the column holds one shape whichever path wrote it
+                    save_sentence_and_code(current_sentence, [all_items[choice_no]])
                     break
                 elif answer.lower() == 'n':
-                    print("종료합니다.")
-                    break 
+                    print("exiting.")
+                    break
                 elif answer == "":
                     # 빈칸 엔터: 다음 후보로 이동
                     choice_no += 1
                     if choice_no >= len(all_items):
-                        print("후보가 더 이상 없습니다.")
-                        #break
+                        print("no further candidates.")
+                        break
                 else:
                     # 어떤 문자열이든 요구사항으로 누적
                     all_items = []
@@ -877,28 +812,53 @@ TV가 켜져 있고 스피커가 꺼져 있으며 조명이 꺼져 있으면 스
                     current_sentence += " " + f"+추가 조건: {answer}"
                     new_dataset = [current_sentence]
                     joilang_each_command(new_dataset, selected_model)
-                    print(f"요구사항 {try_no} '{answer}' 반영하여 재시작")
+                    print(f"requirement {try_no} {answer!r} added; regenerated")
                     try_no += 1
 
     elif len(args) == 1:
         #selected_model = args[0]
-        #paths = [selected_model]
         mode = args[0]
+        # names no command, no version directory and no mode; refused where the
+        # two-argument form refuses it, rather than run as an empty command
+        if not mode.strip():
+            raise SystemExit("empty command: pass the command to generate from")
+        # a lone argument is a command unless it names a version directory next
+        # to run.py, so a command may contain the word "version"
+        version_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), mode)
         if(mode=='dataset'):
             for each_sentence in dataset:
                 print('dataset length:: ', len(dataset))
                 joilang_each_command(sentences=each_sentence)
-        elif('version' in mode):
+        elif os.path.isfile(os.path.join(version_dir, "model_config.json")):
+            # pre-mapping asked for with a version directory and no command is
+            # the two-argument form with its command dropped far more often than
+            # it is a request to pre-map a whole benchmark run; the batch mode
+            # still runs, but not before the missing argument is named
+            if PREMAP_ENABLED:
+                print(f"note: {mode!r} names a version directory and no command followed it "
+                      f'- for a single command use: run.py --premap {mode} "<command>"',
+                      file=sys.stderr)
             benchmark_each_command(model = mode)
         else:
-            joilang_each_command(sentences=mode)        
-    else:
-        base_dir = "."
-        paths = []
-        for name in os.listdir(base_dir):
-            tmp_path = os.path.join(base_dir, name)
-            if os.path.isdir(tmp_path):
-                config_path = os.path.join(tmp_path, "model_config.json")
-                if os.path.isfile(config_path):
-                    paths.append(name)
+            # a single word is a version directory misspelled far more often
+            # than it is a command; it is still run as one, but the reason it
+            # took that branch is said before it reaches the model and the logs
+            if len(mode.split()) < 2:
+                print(f"note: {mode!r} names no version directory next to run.py "
+                      "and is not 'dataset' - running it as a command",
+                      file=sys.stderr)
+            joilang_each_command(sentences=mode)
+    elif not args:
         benchmark_each_command()
+    else:
+        # an unquoted multi-word command arrives as several arguments; saying so
+        # beats silently starting an unrelated batch benchmark
+        raise SystemExit(
+            f"unrecognized arguments: {args}\n"
+            'Usage: run.py [--premap] [--premap-model M] [--premap-mode split|nosplit] '
+            '<version_dir> "<command>"\n'
+            '       run.py "<command>"     single command, default version\n'
+            '       run.py dataset         bundled example batch\n'
+            '       run.py                 batch benchmark (needs ../datasets/)\n'
+            "Quote the command so it stays one argument."
+        )

@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Fine-tuned encoder checkpoints (written by the tutorial, several GB)
+premapping/models/
+
+# Generation logs: run.py creates them next to itself on its first run
+gpt_mg/output_each_command.csv
+gpt_mg/sentence_best_code_log.csv
+
+*.pdf

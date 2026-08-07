@@ -1,5 +1,10 @@
 openai==2.44.0
-pandas==3.0.3
+pandas==2.3.3
 python-dotenv==1.2.2
-Requests==2.34.2
 tqdm==4.68.3
+numpy>=1.24
+
+# Optional: dense retrieval for the --premap option (Service Pre-mapping,
+# intfloat/e5-small + BM25, VALUE/FUNCTION split). Without these, --premap
+# falls back to sparse (BM25+lexical) scoring and records the fallback in logs.
+# sentence-transformers>=3.0

@@ -1,3 +1,0 @@
-﻿sentence,best_code
-불을 꺼줘,"[{'name': '불꺼기', 'cron': '', 'period': -1, 'code': '(#Light).switch_off()'}]"
-32,"[{'name': 'UndefinedCommand', 'cron': '', 'period': -1, 'code': ''}]"

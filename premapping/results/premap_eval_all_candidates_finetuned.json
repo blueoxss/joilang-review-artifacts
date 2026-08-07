@@ -1,0 +1,685 @@
+{
+ "run": "all_candidates_finetuned",
+ "device": "cuda",
+ "retrieval": {
+  "w": 0.6,
+  "top_k": 10,
+  "warmup_queries": 20
+ },
+ "evaluation_pools": {
+  "template singles": 142,
+  "natural singles": 106,
+  "paraphrase singles": 352,
+  "compound-template": 300,
+  "compound-paraphrase": 300
+ },
+ "evaluation_total": 1200,
+ "provenance": {
+  "run": "all_candidates_finetuned",
+  "finetune_all": true,
+  "seed": 2025,
+  "corpus": {
+   "role_documents": 84,
+   "merged_documents": 53,
+   "built_from": [
+    "gpt_mg/version0_6/service_list_ver1.5.4_value.json",
+    "gpt_mg/version0_6/service_list_ver1.5.4_function.json"
+   ]
+  },
+  "training_queries": {
+   "total": 2305,
+   "template": 1137,
+   "natural": 845,
+   "clause": 323,
+   "template_and_clause_from": [
+    "gpt_mg/version0_6/service_list_ver1.5.4_value.json",
+    "gpt_mg/version0_6/service_list_ver1.5.4_function.json"
+   ],
+   "natural_from": [
+    "premapping/data/service_list_ver1.1.7_eng.json",
+    "premapping/data/path_controlled/query_roles.json"
+   ]
+  },
+  "recipe": {
+   "warmup_ratio": 0.1,
+   "max_seq_length": 256,
+   "uniform_batch": 32,
+   "note": "every fine-tuned encoder sees identical queries, epochs, lr and in-batch negatives",
+   "caveat": "hyperparameters (10 epochs, lr 2e-5, 256 tokens) were tuned for e5-small and reused unchanged for every encoder; the *_val splits are built but not used for per-model selection",
+   "params": {
+    "e5": {
+     "hf": "intfloat/e5-small",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "mxbai": {
+     "hf": "mixedbread-ai/mxbai-embed-xsmall-v1",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "multilingual": {
+     "hf": "intfloat/multilingual-e5-small",
+     "epochs": 10,
+     "batch": 32,
+     "lr": 2e-05
+    },
+    "bge-m3": {
+     "hf": "BAAI/bge-m3",
+     "epochs": 10,
+     "batch": 8,
+     "lr": 2e-05
+    }
+   }
+  },
+  "split_fixes_enabled": false,
+  "role_snapped_queries": 0,
+  "split_role_mismatched_pairs": 140,
+  "pair_files": [
+   "premapping/data/integrated/finetune_pairs_split.jsonl",
+   "premapping/data/integrated/finetune_pairs_nosplit.jsonl"
+  ],
+  "checkpoint_suffix": "v7-allft",
+  "finetuned_jobs": [
+   "e5/split",
+   "e5/nosplit",
+   "mxbai/split",
+   "multilingual/split",
+   "bge-m3/split"
+  ],
+  "finetuning": []
+ },
+ "arms": [
+  {
+   "label": "intfloat/e5-small + BM25 (split)",
+   "key": "e5",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/e5-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9829851950431076,
+    "R@5": 0.9952777777777779,
+    "R@10": 1.0,
+    "lat": 10.278163480882844,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 9.067728479301005,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.491406773761758,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.629474008519372,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9932077142703588,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 11.857389610183116,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9504726839465881,
+     "R@5": 0.9811111111111113,
+     "R@10": 1.0,
+     "lat": 12.738861893303692,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9930857562346986,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 9.299447762349688,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "intfloat/e5-small + BM25 (no split)",
+   "key": "e5",
+   "mode": "nosplit",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/e5-nosplit-v7-allft",
+   "total": {
+    "nDCG@10": 0.9809275986885353,
+    "R@5": 0.9877777777777778,
+    "R@10": 0.9980555555555556,
+    "lat": 7.830803950006763,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.799556330469451,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.3685604334316865,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.429143403521845,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9728220452392827,
+     "R@5": 0.9827777777777779,
+     "R@10": 0.9977777777777779,
+     "lat": 7.967234733514487,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9626279675593751,
+     "R@5": 0.9683333333333334,
+     "R@10": 0.9944444444444446,
+     "lat": 7.788170796508591,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9831208266134901,
+     "R@5": 0.990186125211506,
+     "R@10": 0.9986463620981388,
+     "lat": 7.7237704579675865,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "mxbai-embed-xsmall-v1 + BM25 (split)",
+   "key": "mxbai",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/mxbai-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9828265995109454,
+    "R@5": 0.9947222222222223,
+    "R@10": 1.0,
+    "lat": 6.3555591758146575,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.526947408494816,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9667746659117459,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.458286282483418,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 4.745058903526197,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9946864373032309,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.484932556981221,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9483595787850673,
+     "R@5": 0.9788888888888889,
+     "R@10": 1.0,
+     "lat": 9.681830833433196,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9932014853128007,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 6.596187163418547,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "multilingual-e5-small (split)",
+   "key": "multilingual",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": true,
+   "model": "premapping/models/multilingual-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9845054241695682,
+    "R@5": 0.9944444444444446,
+    "R@10": 1.0,
+    "lat": 10.215020597582528,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.782771795588006,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9807018450222569,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.395330783559607,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.387989727166397,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9949033174133032,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 13.410678569925949,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9499370606904396,
+     "R@5": 0.9777777777777779,
+     "R@10": 1.0,
+     "lat": 12.891793089996403,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9947865532654248,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 10.098614113707908,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "BAAI/bge-m3 (split)",
+   "key": "bge-m3",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": true,
+   "model": "premapping/models/bge-m3-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9841051202484075,
+    "R@5": 0.9941666666666666,
+    "R@10": 0.9991666666666666,
+    "lat": 17.766967760787036,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 15.543831613170587,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9754036722708904,
+     "R@5": 0.9905660377358491,
+     "R@10": 0.9905660377358491,
+     "lat": 13.756644942815292,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 13.887042269991733,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9946864373032309,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 20.64938795675213,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9504247461546843,
+     "R@5": 0.98,
+     "R@10": 1.0,
+     "lat": 21.198270849805947,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9948239049663543,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 15.803576894411771,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "intfloat/e5-small (split, dense-only)",
+   "key": "e5",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": true,
+   "model": "premapping/models/e5-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9847137219473765,
+    "R@5": 0.9952777777777779,
+    "R@10": 1.0,
+    "lat": 9.74322330749904,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.771053598177108,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9813558397574135,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.621904839497973,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.405304113490274,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9947948773582671,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 10.640386913437396,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.950647613716953,
+     "R@5": 0.9811111111111113,
+     "R@10": 1.0,
+     "lat": 12.146537530158337,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9948569323942842,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 9.388324173597553,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "mxbai-embed-xsmall-v1 (split, dense-only)",
+   "key": "mxbai",
+   "mode": "split",
+   "search": "dense-only",
+   "finetuned": true,
+   "model": "premapping/models/mxbai-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9837950602139798,
+    "R@5": 0.9944444444444446,
+    "R@10": 1.0,
+    "lat": 6.654413995759872,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.154143148233039,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9778740449797857,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 5.075808415707763,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 4.476145770075329,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9947948773582671,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 8.03478282992728,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9482032009381275,
+     "R@5": 0.9777777777777779,
+     "R@10": 1.0,
+     "lat": 9.845066326670349,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9943959362581939,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 5.9881138943873236,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "multilingual-e5-small + BM25 (split)",
+   "key": "multilingual",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/multilingual-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.982581164314408,
+    "R@5": 0.9947222222222223,
+    "R@10": 1.0,
+    "lat": 9.133130965055898,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 9.150823725807205,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9632928711341181,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.9108476419142395,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.680396494503261,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9928823941052506,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 9.089972166499745,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.95041211535166,
+     "R@5": 0.9788888888888889,
+     "R@10": 1.0,
+     "lat": 11.765826319654781,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9926018580080384,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 9.132617319754424,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "BAAI/bge-m3 + BM25 (split)",
+   "key": "bge-m3",
+   "mode": "split",
+   "search": "hybrid",
+   "finetuned": true,
+   "model": "premapping/models/bge-m3-split-v7-allft",
+   "total": {
+    "nDCG@10": 0.9838301242100912,
+    "R@5": 0.9947222222222223,
+    "R@10": 1.0,
+    "lat": 15.816048025056563,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 15.469640993486934,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9709104554245302,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 13.661012018345437,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 13.708416409248127,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9949033174133032,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 15.741076106593633,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9506954851770609,
+     "R@5": 0.9788888888888889,
+     "R@10": 1.0,
+     "lat": 18.907375366737448,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9938090407709698,
+     "R@5": 0.9996615905245347,
+     "R@10": 1.0,
+     "lat": 15.501549004146897,
+     "n": 985
+    }
+   }
+  },
+  {
+   "label": "intfloat/e5-small (no split, dense-only)",
+   "key": "e5",
+   "mode": "nosplit",
+   "search": "dense-only",
+   "finetuned": true,
+   "model": "premapping/models/e5-nosplit-v7-allft",
+   "total": {
+    "nDCG@10": 0.9783441297572153,
+    "R@5": 0.9770833333333333,
+    "R@10": 0.9925,
+    "lat": 7.554990674155609,
+    "n": 1200
+   },
+   "per": {
+    "template singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.29025926762326,
+     "n": 142
+    },
+    "natural singles": {
+     "nDCG@10": 0.9778740449797857,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.222060536974514,
+     "n": 106
+    },
+    "paraphrase singles": {
+     "nDCG@10": 1.0,
+     "R@5": 1.0,
+     "R@10": 1.0,
+     "lat": 7.340645267091036,
+     "n": 352
+    },
+    "compound-template": {
+     "nDCG@10": 0.9641343271741776,
+     "R@5": 0.9605555555555556,
+     "R@10": 0.9883333333333333,
+     "lat": 7.431569283362478,
+     "n": 300
+    },
+    "compound-paraphrase": {
+     "nDCG@10": 0.9570600292951599,
+     "R@5": 0.9477777777777777,
+     "R@10": 0.9816666666666667,
+     "lat": 7.48595931295616,
+     "n": 300
+    },
+    "unseen-string subset": {
+     "nDCG@10": 0.9828407479931318,
+     "R@5": 0.9827411167512691,
+     "R@10": 0.9944162436548223,
+     "lat": 7.439518661881197,
+     "n": 985
+    }
+   }
+  }
+ ]
+}
